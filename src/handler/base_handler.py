@@ -43,6 +43,10 @@ class BaseHandler:
         if isinstance(message, BaseMessage):
             message = Message(**message.model_dump())
 
+
+        if message.text is None and message.media_url is None:
+            return message  # Don't store messages without any content
+
         if not message.text and not message.media_url:
             return message  # Don't store completely empty messages
 
