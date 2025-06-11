@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 import pytest
 
 from models import Message
+from handler.base_handler import BaseHandler
+from unittest.mock import AsyncMock
 from models.webhook import WhatsAppWebhookPayload, ExtractedMedia
 from test_utils.mock_session import mock_session  # noqa
 
@@ -61,3 +63,24 @@ async def test_message_with_image(mock_session):
 
     message = Message.from_webhook(payload)
     assert message.text == "[[Attached Image]] This is an image"
+    assert message.media_url == "https://example.com/image.jpg"
+
+
+@pytest.mark.asyncio
+async def test_store_image_only_message(mock_session):
+    handler = BaseHandler(mock_session, AsyncMock(), AsyncMock())
+    handler.upsert = AsyncMock(side_effect=lambda m: m)
+    payload = WhatsAppWebhookPayload(
+        from_="1234567890@s.whatsapp.net in 123456789-123456@g.us",
+        timestamp=datetime.now(timezone.utc),
+        pushname="Test User",
+        image=ExtractedMedia(
+            caption="",
+            media_path="https://example.com/only_image.jpg",
+            mime_type="image/jpeg",
+        ),
+    )
+
+    message = await handler.store_message(payload)
+    assert message.media_url == "https://example.com/only_image.jpg"
+
