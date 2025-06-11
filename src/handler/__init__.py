@@ -22,7 +22,9 @@ class MessageHandler(BaseHandler):
         embedding_client: AsyncClient,
     ):
         self.router = Router(session, whatsapp, embedding_client)
-        self.whatsapp_group_link_spam = WhatsappGroupLinkSpamHandler(session, whatsapp, embedding_client)
+        self.whatsapp_group_link_spam = WhatsappGroupLinkSpamHandler(
+            session, whatsapp, embedding_client
+        )
         super().__init__(session, whatsapp, embedding_client)
 
     async def __call__(self, payload: WhatsAppWebhookPayload):
@@ -39,12 +41,11 @@ class MessageHandler(BaseHandler):
         # ignore messages from unmanaged groups
         if message and message.group and not message.group.managed:
             return
-        
+
         bot_jid = await self.whatsapp.get_my_jid()
         if message.has_mentioned(bot_jid) and "bot" in message.text.lower():
             await self.router(message)
 
-        # Handle whatsapp links in group 
+        # Handle whatsapp links in group
         if "https://chat.whatsapp.com/" in message.text:
             await self.whatsapp_group_link_spam(message)
-
