@@ -43,8 +43,8 @@ class BaseHandler:
         if isinstance(message, BaseMessage):
             message = Message(**message.model_dump())
 
-        if not message.text:
-            return message  # Don't store messages without text
+        if not message.text and not message.media_url:
+            return message  # Don't store completely empty messages
 
         async with self.session.begin_nested():
             # Ensure sender exists and is committed
