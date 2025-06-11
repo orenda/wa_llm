@@ -63,6 +63,7 @@ async def test_message_with_image(mock_session):
 
     message = Message.from_webhook(payload)
     assert message.text == "[[Attached Image]] This is an image"
+    # New assertion to verify the media URL is parsed correctly
     assert message.media_url == "https://example.com/image.jpg"
 
 

@@ -92,7 +92,7 @@ class Router(BaseHandler):
             - Tag users when mentioning them
             - You MUST respond with the same language as the request
             """,
-            output_type=str,
+            result_type=str,
         )
 
         response = await agent.run(
