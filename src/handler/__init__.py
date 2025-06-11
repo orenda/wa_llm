@@ -40,8 +40,9 @@ class MessageHandler(BaseHandler):
         if message and message.group and not message.group.managed:
             return
         
-        if  message.has_mentioned(await self.whatsapp.get_my_jid()):
-                    await self.router(message)
+        bot_jid = await self.whatsapp.get_my_jid()
+        if message.has_mentioned(bot_jid) and "bot" in message.text.lower():
+            await self.router(message)
 
         # Handle whatsapp links in group 
         if "https://chat.whatsapp.com/" in message.text:

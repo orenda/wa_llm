@@ -43,14 +43,41 @@ docker-compose up -d
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
 ## Usage
+Managed groups are flagged in the database. Only those groups will receive bot responses. 
+1. Mark a WhatsApp group as managed in the database using `UPDATE "group" SET managed = true WHERE group_jid = '<jid>';`.
 
-Managed groups are flagged in the database. Only those groups will receive bot responses. To trigger a reply you must mention the bot's phone number **and** include the word `bot` in the message. Once triggered you can ask for conversation summaries or query the knowledge base with commands such as `bot summarize` or `bot how do we ...`.
+To trigger a reply you must mention the bot's phone number **and** include the word `bot` in the message.
+ Once triggered you can ask for conversation summaries or query the knowledge base with commands such as `bot summarize` or `bot how do we ...`.
+
+2. Mention the bot's phone number **and** include the word `bot` to activate it, for example:
+
+   ```text
+   @<bot-number> bot summarize
+   ```
+
+3. The bot can summarize the last 24 hours of chat or answer knowledge base questions when triggered.
+
 
 ## Developing
 
 * install uv tools `uv sync --all-extras --active`
 * run ruff (Python linter and code formatter) `ruff check` and `ruff format`
 * check for types usage `pyright`
+## Testing
+
+Install dev dependencies and run the test suite after starting the supporting services:
+```bash
+uv sync --all-extras --dev
+docker-compose up -d
+pytest
+```
+
+Tests require the environment variables described in the Setup section. To generate coverage reports use:
+```bash
+uv run coverage run --source=pytest_evals -m pytest
+uv run coverage xml
+```
+
 
 ## Architecture
 
@@ -76,4 +103,4 @@ The project consists of several key components:
 
 ## License
 
-[LICENCE](CODE_OF_CONDUCT.md)
+[LICENSE](LICENSE)
