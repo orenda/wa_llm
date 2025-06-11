@@ -72,4 +72,4 @@ The project consists of several key components:
 
 ## License
 
-[LICENCE](CODE_OF_CONDUCT.md)
+[LICENSE](LICENSE)
