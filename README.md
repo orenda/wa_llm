@@ -120,4 +120,4 @@ running, the same content is available at `http://localhost:5001/calendar.ics`.
 
 ## License
 
-[LICENSE](LICENSE)
+See [LICENSE](LICENSE) for more details.

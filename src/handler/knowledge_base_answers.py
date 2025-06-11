@@ -142,7 +142,7 @@ class KnowledgeBaseAnswers(BaseHandler):
             - ONLY answer with the new phrased query, no other text!""",
         )
 
-        # We obviously need to translate the question and turn the question vebality to a title / summary text to make it closer to the questions in the rag
+        # We obviously need to translate the question and turn the question verbosity to a title / summary text to make it closer to the questions in the RAG
         return await rephrased_agent.run(
             f"{message.text}\n\n## Recent chat history:\n {chat2text(history)}"
         )
