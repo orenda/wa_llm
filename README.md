@@ -42,6 +42,14 @@ docker-compose up -d
 
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
+## Usage
+
+Mention the bot in a group message and include the word `bot` followed by a command. For example:
+
+```text
+@<your number> bot summarize
+```
+
 ## Developing
 
 * install uv tools `uv sync --all-extras --active`
