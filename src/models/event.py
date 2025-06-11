@@ -3,7 +3,6 @@ from typing import Optional
 
 from sqlmodel import SQLModel, Field, Column, DateTime
 
-
 class BaseEvent(SQLModel):
     id: str = Field(primary_key=True, max_length=255)
     title: str
@@ -22,6 +21,3 @@ class BaseEvent(SQLModel):
 
 class Event(BaseEvent, table=True):
     pass
-
-
-Event.model_rebuild()
