@@ -42,11 +42,47 @@ docker-compose up -d
 
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
+## Usage
+
+Mention the bot in a group message and include the word `bot` followed by a command. For example:
+
+```text
+@<your number> bot summarize
+```
+=======
+Managed groups are flagged in the database. Only those groups will receive bot responses. 
+1. Mark a WhatsApp group as managed in the database using `UPDATE "group" SET managed = true WHERE group_jid = '<jid>';`.
+
+To trigger a reply you must mention the bot's phone number **and** include the word `bot` in the message.
+ Once triggered you can ask for conversation summaries or query the knowledge base with commands such as `bot summarize` or `bot how do we ...`.
+
+2. Mention the bot's phone number **and** include the word `bot` to activate it, for example:
+
+   ```text
+   @<bot-number> bot summarize
+   ```
+
+3. The bot can summarize the last 24 hours of chat or answer knowledge base questions when triggered.
 ## Developing
 
 * install uv tools `uv sync --all-extras --active`
 * run ruff (Python linter and code formatter) `ruff check` and `ruff format`
 * check for types usage `pyright`
+## Testing
+
+Install dev dependencies and run the test suite after starting the supporting services:
+```bash
+uv sync --all-extras --dev
+docker-compose up -d
+pytest
+```
+
+Tests require the environment variables described in the Setup section. To generate coverage reports use:
+```bash
+uv run coverage run --source=pytest_evals -m pytest
+uv run coverage xml
+```
+
 
 ## Architecture
 
@@ -64,6 +100,18 @@ The project consists of several key components:
 - Message handler: `src/handler/__init__.py`
 - Database models: `src/models/`
 
+## Calendar Export
+
+Events stored in the database can be exported to an iCalendar file. You can run
+the standalone script:
+
+```bash
+python -m app.calendar
+```
+
+This writes `calendar.ics` in the current directory. When the FastAPI server is
+running, the same content is available at `http://localhost:5001/calendar.ics`.
+
 ## Contributing
 
 1. Fork the repository
@@ -72,4 +120,4 @@ The project consists of several key components:
 
 ## License
 
-[LICENCE](CODE_OF_CONDUCT.md)
+[LICENSE](LICENSE)

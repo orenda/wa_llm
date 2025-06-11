@@ -4,14 +4,17 @@ from typing import Annotated
 from warnings import warn
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
+from ics import Calendar, Event as ICSEvent
+from sqlmodel import select
 import logging
 import logfire
 
 import models  # noqa
 from config import Settings
-from deps import get_handler
+from deps import get_handler, get_db_async_session
 from handler import MessageHandler
 from whatsapp import WhatsAppClient
 from whatsapp.init_groups import gather_groups
@@ -75,6 +78,24 @@ logfire.instrument_pydantic_ai()
 logfire.instrument_fastapi(app)
 logfire.instrument_httpx(capture_all=True)
 logfire.instrument_system_metrics()
+
+
+@app.get("/calendar.ics", response_class=PlainTextResponse)
+async def calendar(
+    session: Annotated[AsyncSession, Depends(get_db_async_session)],
+) -> str:
+    events = (await session.exec(select(models.Event))).all()
+    cal = Calendar()
+    for event in events:
+        item = ICSEvent()
+        item.name = event.title
+        item.begin = event.start_time
+        if event.end_time:
+            item.end = event.end_time
+        if event.description:
+            item.description = event.description
+        cal.events.add(item)
+    return cal.serialize()
 
 
 @app.post("/webhook")

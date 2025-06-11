@@ -43,8 +43,12 @@ class BaseHandler:
         if isinstance(message, BaseMessage):
             message = Message(**message.model_dump())
 
+
         if message.text is None and message.media_url is None:
             return message  # Don't store messages without any content
+
+        if not message.text and not message.media_url:
+            return message  # Don't store completely empty messages
 
         async with self.session.begin_nested():
             # Ensure sender exists and is committed
@@ -69,7 +73,20 @@ class BaseHandler:
                     await self.session.flush()
 
             # Finally add the message
-            return await self.upsert(message)
+            stored = await self.upsert(message)
+
+            from events.extract import parse_event
+
+            if stored.text:
+                event = await parse_event(stored.text)
+                if event:
+                    event.message_id = stored.message_id
+                    event.group_jid = stored.group_jid
+                    if not event.id:
+                        event.id = stored.message_id
+                    await self.upsert(event)
+
+            return stored
 
     async def send_message(
         self, to_jid: str, message: str, in_reply_to: str | None = None
