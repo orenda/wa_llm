@@ -3,25 +3,21 @@ from typing import Optional
 
 from sqlmodel import SQLModel, Field, Column, DateTime
 
-
-class Event(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    group_jid: Optional[str] = Field(
-        default=None, max_length=255, foreign_key="group.group_jid"
-    )
-    message_id: Optional[str] = Field(
-        default=None, max_length=255, foreign_key="message.message_id"
-    )
+class BaseEvent(SQLModel):
+    id: str = Field(primary_key=True, max_length=255)
     title: str
     start_time: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False),
         default_factory=lambda: datetime.now(timezone.utc),
-    )
-    end_time: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False),
-        default_factory=lambda: datetime.now(timezone.utc),
     )
-    location: Optional[str] = Field(default=None, max_length=255)
+    end_time: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    description: Optional[str] = None
+    group_jid: Optional[str] = Field(
+        default=None, foreign_key="group.group_jid", max_length=255
+    )
 
 
-Event.model_rebuild()
+class Event(BaseEvent, table=True):
+    pass

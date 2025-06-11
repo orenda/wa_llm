@@ -100,6 +100,18 @@ The project consists of several key components:
 - Message handler: `src/handler/__init__.py`
 - Database models: `src/models/`
 
+## Calendar Export
+
+Events stored in the database can be exported to an iCalendar file. You can run
+the standalone script:
+
+```bash
+python -m app.calendar
+```
+
+This writes `calendar.ics` in the current directory. When the FastAPI server is
+running, the same content is available at `http://localhost:5001/calendar.ics`.
+
 ## Contributing
 
 1. Fork the repository
