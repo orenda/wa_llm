@@ -43,8 +43,12 @@ docker-compose up -d
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
 ## Usage
-
+Managed groups are flagged in the database. Only those groups will receive bot responses. 
 1. Mark a WhatsApp group as managed in the database using `UPDATE "group" SET managed = true WHERE group_jid = '<jid>';`.
+
+To trigger a reply you must mention the bot's phone number **and** include the word `bot` in the message.
+ Once triggered you can ask for conversation summaries or query the knowledge base with commands such as `bot summarize` or `bot how do we ...`.
+
 2. Mention the bot's phone number **and** include the word `bot` to activate it, for example:
 
    ```text
