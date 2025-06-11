@@ -77,6 +77,7 @@ def _get_speaker_mapping(messages: List[Message]) -> Dict[str, str]:
             if speaker.startswith("@") and speaker[1:].isdigit():
                 if speaker[1:] not in speaker_mapping:
                     speaker_mapping[speaker[1:]] = f"user_{i}"
+                    i += 1
 
     return speaker_mapping
 
