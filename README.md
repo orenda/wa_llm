@@ -107,7 +107,7 @@ Events stored in the database can be exported to an iCalendar file. You can run
 the standalone script:
 
 ```bash
-python -m app.calendar
+python -m app.cal_service
 ```
 
 This writes `calendar.ics` in the current directory. When the FastAPI server is
