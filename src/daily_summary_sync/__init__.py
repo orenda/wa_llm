@@ -38,7 +38,7 @@ async def summarize(group_name: str, messages: list[Message]) -> AgentRunResult[
         - Write in the same language as the chat group. You MUST use the same language as the chat group!
         - Please do tag users while talking about them (e.g., @972536150150). ONLY answer with the new phrased query, no other text.
         """,
-        result_type=str,
+        output_type=str,
     )
 
     return await agent.run(chat2text(messages))

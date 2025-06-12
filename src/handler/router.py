@@ -64,7 +64,7 @@ class Router(BaseHandler):
         agent = Agent(
             model="anthropic:claude-4-sonnet-20250514",
             system_prompt="What is the intent of the message? What does the user want us to help with?",
-            result_type=Intent,
+            output_type=Intent,
         )
 
         result = await agent.run(message)

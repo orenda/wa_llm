@@ -12,11 +12,14 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
 
     async with AsyncSession(db_engine) as session:
         try:
+            if groups is None or groups.results is None:
+                return
             for g in groups.results.data:
-                if (await session.get(Sender, g.OwnerJID)) is None and g.OwnerJID:
+                ownerUsr = g.OwnerPN or g.OwnerJID or None
+                if (await session.get(Sender, ownerUsr)) is None and ownerUsr:
                     owner = Sender(
                         **BaseSender(
-                            jid=g.OwnerJID,
+                            jid=ownerUsr,
                         ).model_dump()
                     )
                     await upsert(session, owner)
@@ -28,7 +31,7 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
                         group_jid=g.JID,
                         group_name=g.Name,
                         group_topic=g.Topic,
-                        owner_jid=g.OwnerJID,
+                        owner_jid=ownerUsr,
                         managed=og.managed if og else False,
                         community_keys=og.community_keys if og else None,
                         last_ingest=og.last_ingest if og else datetime.now(),
