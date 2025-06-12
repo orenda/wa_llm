@@ -12,9 +12,16 @@ from bot.zmanim_handler import (
 @pytest.mark.parametrize(
     "query,expected",
     [
-        ("מתי שקיעה?", {"type": "specific", "zman": "shkiat_hachama", "target": "today"}),
+        (
+            "מתי שקיעה?",
+            {"type": "specific", "zman": "shkiat_hachama", "target": "today"},
+        ),
         ("מה זמני היום", {"type": "all", "target": "today"}),
-        ("מחר עלות", {"type": "specific", "zman": "alot_hashachar", "target": "tomorrow"}),
+        (
+            "מחר עלות",
+            {"type": "specific", "zman": "alot_hashachar", "target": "tomorrow"},
+        ),
+        ("מתי זריחה?", {"type": "specific", "zman": "netz_hachama", "target": "today"}),
     ],
 )
 def test_parse_zmanim_query(query, expected):

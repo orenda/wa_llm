@@ -179,7 +179,7 @@ def get_hebrew_date_string(target_date: date) -> str:
 
 ZMAN_KEYWORDS = {
     "alot_hashachar": r"עלות",
-    "netz_hachama": r"הנץ",
+    "netz_hachama": r"הנץ|זריחה",
     "sof_zman_shema": r"שמע",
     "sof_zman_tefila": r"תפילה",
     "chatzot": r"חצות",
