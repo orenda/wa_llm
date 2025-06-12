@@ -17,6 +17,12 @@ class BaseEvent(SQLModel):
     group_jid: Optional[str] = Field(
         default=None, foreign_key="group.group_jid", max_length=255
     )
+    message_id: Optional[str] = Field(
+        default=None,
+        foreign_key="message.message_id",
+        max_length=255,
+    )
+    location: Optional[str] = Field(default=None, max_length=255)
 
 
 class Event(BaseEvent, table=True):
