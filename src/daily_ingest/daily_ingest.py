@@ -56,7 +56,7 @@ async def conversation_splitter_agent(content: str) -> AgentRunResult[List[Topic
 
 My goal is learn the different subject discussed in the group chat. This will be used as a knowledge base for the group, so it should not loose any important information or insights.
 """,
-        result_type=List[Topic],
+        output_type=List[Topic],
         retries=5,
     )
 
