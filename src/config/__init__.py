@@ -46,3 +46,11 @@ class Settings(BaseSettings):
             environ["LOGFIRE_TOKEN"] = self.logfire_token
 
         return self
+
+# Zmanim Settings
+LOCATION_CONFIG = {
+    "name": "לוד",
+    "latitude": 31.9515,
+    "longitude": 34.8955,
+    "timezone": "Asia/Jerusalem",
+}
