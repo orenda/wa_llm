@@ -75,6 +75,7 @@ async def test_router_ask_question_route(
 
     # Create router instance
     router = Router(mock_session, mock_whatsapp, mock_embedding_client)
+    router.upsert = AsyncMock(side_effect=lambda m: m)
 
     # Test the route
     await router(test_message)
@@ -172,6 +173,7 @@ async def test_send_message(
     mock_session: AsyncSessionMock,
     mock_whatsapp: AsyncMock,
     mock_embedding_client: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     # Set up mock response
     mock_whatsapp.send_message.return_value.results.message_id = "response_id"
@@ -179,6 +181,8 @@ async def test_send_message(
 
     # Create router instance
     router = Router(mock_session, mock_whatsapp, mock_embedding_client)
+    router.upsert = AsyncMock(side_effect=lambda m: m)
+    monkeypatch.setattr("events.extract.parse_event", AsyncMock(return_value=None))
 
     # Test sending a message
     await router.send_message("user@s.whatsapp.net", "Test message")

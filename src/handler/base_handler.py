@@ -1,3 +1,4 @@
+import logging
 from sqlmodel.ext.asyncio.session import AsyncSession
 from voyageai.client_async import AsyncClient
 
@@ -80,11 +81,14 @@ class BaseHandler:
             if stored.text:
                 event = await parse_event(stored.text)
                 if event:
+                    if not event.title or not event.id:
+                        logging.warning("parse_event returned incomplete event: %s", event)
                     event.message_id = stored.message_id
                     event.group_jid = stored.group_jid
                     if not event.id:
                         event.id = stored.message_id
-                    await self.upsert(event)
+                    if event.title and event.id:
+                        await self.upsert(event)
 
             return stored
 
