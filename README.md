@@ -22,18 +22,13 @@ A WhatsApp bot that can participate in group conversations, powered by AI. The b
 
 1. Clone the repository
 
-2. Create a `.env` file in the src directory with the following variables:
+2. Copy the example environment file and update it with your credentials:
 
-```env
-WHATSAPP_HOST=http://localhost:3000
-WHATSAPP_BASIC_AUTH_USER=admin
-WHATSAPP_BASIC_AUTH_PASSWORD=admin
-VOYAGE_API_KEY=your_voyage_api_key
-DB_URI=postgresql+asyncpg://user:password@localhost:5432/postgres
-LOG_LEVEL=INFO
-ANTHROPIC_API_KEY=your-key-here # You need to have a real anthropic key here, starts with sk-....
-LOGFIRE_TOKEN=your-key-here # You need to have a real logfire key here
+```bash
+cp src/.env.example src/.env
 ```
+
+The `src/.env.example` file lists all required variables.
 
 3. Start the services:
 ```bash
