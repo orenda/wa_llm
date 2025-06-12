@@ -26,7 +26,15 @@ except Exception:  # pragma: no cover - library optional in tests
     HebrewDateFormatter = None
 
 
-WEEKDAYS = ["יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת", "יום ראשון"]
+WEEKDAYS = [
+    "יום שני",
+    "יום שלישי",
+    "יום רביעי",
+    "יום חמישי",
+    "יום שישי",
+    "יום שבת",
+    "יום ראשון",
+]
 HEBREW_MONTHS = {
     1: "ניסן",
     2: "אייר",
@@ -48,7 +56,10 @@ HEBREW_MONTHS = {
 # Calculation helpers
 # ---------------------------------------------------------------------------
 
-def _basic_sun_time(d: date, latitude: float, longitude: float, tz: str, sunrise: bool) -> datetime:
+
+def _basic_sun_time(
+    d: date, latitude: float, longitude: float, tz: str, sunrise: bool
+) -> datetime:
     """Approximate sunrise/sunset using NOAA algorithm (used if pyzmanim is not installed)."""
     n = d.timetuple().tm_yday
     lng_hour = longitude / 15.0
@@ -64,9 +75,9 @@ def _basic_sun_time(d: date, latitude: float, longitude: float, tz: str, sunrise
     RA /= 15
     sin_dec = 0.39782 * sin(radians(L))
     cos_dec = cos(asin(sin_dec))
-    cos_h = (
-        cos(radians(90.833)) - (sin_dec * sin(radians(latitude)))
-    ) / (cos_dec * cos(radians(latitude)))
+    cos_h = (cos(radians(90.833)) - (sin_dec * sin(radians(latitude)))) / (
+        cos_dec * cos(radians(latitude))
+    )
     if cos_h > 1 or cos_h < -1:
         raise ValueError("Sun never rises or sets on this date at this location")
     if sunrise:
@@ -139,6 +150,7 @@ def get_daily_zmanim(target_date: date) -> dict:
 # Formatting
 # ---------------------------------------------------------------------------
 
+
 def _hebrew_date(target_date: date) -> tuple[str, str]:
     """Return weekday and hebrew date strings."""
     if HDate and HebrewDateFormatter and HLocation:
@@ -179,7 +191,7 @@ def get_hebrew_date_string(target_date: date) -> str:
 
 ZMAN_KEYWORDS = {
     "alot_hashachar": r"עלות",
-    "netz_hachama": r"הנץ",
+    "netz_hachama": r"הנץ|זריחה",
     "sof_zman_shema": r"שמע",
     "sof_zman_tefila": r"תפילה",
     "chatzot": r"חצות",
@@ -214,17 +226,20 @@ def parse_zmanim_query(message_text: str) -> dict | None:
 # Response Formatting
 # ---------------------------------------------------------------------------
 
+
 def _format_time(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
 
-def format_zmanim_response(zmanim_data: dict, hebrew_date_str: str, query_type: str, zman: str | None = None) -> str:
+def format_zmanim_response(
+    zmanim_data: dict, hebrew_date_str: str, query_type: str, zman: str | None = None
+) -> str:
     """Create a WhatsApp-ready Hebrew string from zmanim data."""
     if query_type == "specific" and zman:
         label_map = {
             "alot_hashachar": "🌅 עלות השחר",
             "netz_hachama": "☀️ הנץ החמה",
-            "sof_zman_shema": "📖 סוף זמן ק""ש",
+            "sof_zman_shema": "📖 סוף זמן קש",
             "sof_zman_tefila": "🙏 סוף זמן תפילה",
             "chatzot": "🕛 חצות היום",
             "mincha_gedola": "🌇 מנחה גדולה",
@@ -251,11 +266,11 @@ def format_zmanim_response(zmanim_data: dict, hebrew_date_str: str, query_type: 
         f"🌅 עלות השחר: {_format_time(zmanim_data['alot_hashachar'])}",
         f"☀️ הנץ החמה: {_format_time(zmanim_data['netz_hachama'])}",
         "",
-        f"📖 סוף זמן ק\"ש (מ""א): {_format_time(zmanim_data['sof_zman_shema_ma'])}",
-        f"📖 סוף זמן ק\"ש (גר""א): {_format_time(zmanim_data['sof_zman_shema_gra'])}",
+        f'📖 סוף זמן ק"ש (מ"א): {_format_time(zmanim_data["sof_zman_shema_ma"])}',
+        f'📖 סוף זמן ק"ש (גר"א): {_format_time(zmanim_data["sof_zman_shema_gra"])}',
         "",
-        f"🙏 סוף זמן תפילה (מ""א): {_format_time(zmanim_data['sof_zman_tefila_ma'])}",
-        f"🙏 סוף זמן תפילה (גר""א): {_format_time(zmanim_data['sof_zman_tefila_gra'])}",
+        f'🙏 סוף זמן תפילה (מ"א): {_format_time(zmanim_data["sof_zman_tefila_ma"])}',
+        f'🙏 סוף זמן תפילה (גר"א): {_format_time(zmanim_data["sof_zman_tefila_gra"])}',
         "",
         f"🕛 חצות היום: {_format_time(zmanim_data['chatzot'])}",
         "",
@@ -265,6 +280,6 @@ def format_zmanim_response(zmanim_data: dict, hebrew_date_str: str, query_type: 
         f"🌆 שקיעת החמה: {_format_time(zmanim_data['shkiat_hachama'])}",
         "",
         f"🌃 צאת הכוכבים (18 דק'): {_format_time(zmanim_data['tzet_hakochavim_18'])}",
-        f"🌃 צאת הכוכבים (ר""ת): {_format_time(zmanim_data['tzet_hakochavim_rt'])}",
+        f'🌃 צאת הכוכבים (ר"ת): {_format_time(zmanim_data["tzet_hakochavim_rt"])}',
     ]
     return "\n".join(lines)
