@@ -23,6 +23,9 @@ dependencies = [
 
     "ics>=0.7",
 
+    "pyzmanim",
+    "hdate",
+
 ]
 
 [dependency-groups]

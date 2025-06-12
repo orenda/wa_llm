@@ -1,10 +1,17 @@
 import logging
+from datetime import date, timedelta
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 from voyageai.client_async import AsyncClient
 
 from handler.router import Router
 from handler.whatsapp_group_link_spam import WhatsappGroupLinkSpamHandler
+from bot.zmanim_handler import (
+    parse_zmanim_query,
+    get_daily_zmanim,
+    get_hebrew_date_string,
+    format_zmanim_response,
+)
 from models import (
     WhatsAppWebhookPayload,
 )
@@ -40,6 +47,19 @@ class MessageHandler(BaseHandler):
 
         # ignore messages from unmanaged groups
         if message and message.group and not message.group.managed:
+            return
+
+        query = parse_zmanim_query(message.text)
+        if query:
+            target_date = date.today()
+            if query.get("target") == "tomorrow":
+                target_date += timedelta(days=1)
+            zmanim = get_daily_zmanim(target_date)
+            hebrew_date = get_hebrew_date_string(target_date)
+            response = format_zmanim_response(
+                zmanim, hebrew_date, query["type"], query.get("zman")
+            )
+            await self.send_message(message.chat_jid, response, message.message_id)
             return
 
         bot_jid = await self.whatsapp.get_my_jid()
