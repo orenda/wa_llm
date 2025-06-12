@@ -68,6 +68,7 @@ To trigger a reply you must mention the bot's phone number **and** include the w
 * install uv tools `uv sync --all-extras --active`
 * run ruff (Python linter and code formatter) `ruff check` and `ruff format`
 * check for types usage `pyright`
+* create Alembic migrations on the host machine and commit them to the repo
 ## Testing
 
 Install dev dependencies and run the test suite after starting the supporting services:

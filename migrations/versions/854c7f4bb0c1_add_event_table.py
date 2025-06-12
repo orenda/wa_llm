@@ -1,7 +1,7 @@
 """add events table
 
 Revision ID: 854c7f4bb0c1
-Revises: f26c6bacce0b
+Revises: 525f47ea96e3
 Create Date: 2025-06-11 18:12:33.000000
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "854c7f4bb0c1"
-down_revision: Union[str, None] = "f26c6bacce0b"
+down_revision: Union[str, None] = "525f47ea96e3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -16,6 +16,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./src/.env:/app/.env
+      - ./migrations:/app/migrations
     ports:
       - "5001:5001"
     depends_on:
