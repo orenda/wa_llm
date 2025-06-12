@@ -29,7 +29,7 @@ class IntentEnum(str, Enum):
 class Intent(BaseModel):
     intent: IntentEnum = Field(
         description="""The intent of the message.
-- summarize: Summarize TODAY's chat messages, or catch up on the chat messages FROM TODAY ONLY. This will trigger the summarization of the chat messages. This is only relevant for queries about TODDAY chat. A query across a broader timespan is classified as ask_question
+        - summarize: Summarize TODAY's chat messages, or catch up on the chat messages FROM TODAY ONLY. This will trigger the summarization of the chat messages. This is only relevant for queries about TODAY chat. A query across a broader timespan is classified as ask_question
 - ask_question: Ask a question or learn from the collective knowledge of the group. This will trigger the knowledge base to answer the question.
 - about: Learn about me(bot) and my capabilities. This will trigger the about section.
 - other:  something else. This will trigger the default response."""
@@ -114,6 +114,6 @@ class Router(BaseHandler):
     async def default_response(self, message):
         await self.send_message(
             message.chat_jid,
-            "I'm sorry, but I dont think this is something I can help with right now 😅.\n I can help catch up on the chat messages or answer questions based on the group's knowledge.",
+            "I'm sorry, but I don’t think this is something I can help with right now 😅.\n I can help catch up on the chat messages or answer questions based on the group's knowledge.",
             message.message_id,
         )
