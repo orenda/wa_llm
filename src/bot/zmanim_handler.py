@@ -11,13 +11,6 @@ from zoneinfo import ZoneInfo
 from config import LOCATION_CONFIG
 
 try:
-    from pyzmanim.zmanim_calendar import ZmanimCalendar
-    from pyzmanim.util import GeoLocation
-except Exception:  # pragma: no cover - library optional in tests
-    ZmanimCalendar = None
-    GeoLocation = None
-
-try:
     from hdate import HDate, Location as HLocation
     from hdate.hebrew_date_formatter import HebrewDateFormatter
 except Exception:  # pragma: no cover - library optional in tests
@@ -57,73 +50,45 @@ HEBREW_MONTHS = {
 # ---------------------------------------------------------------------------
 
 
-def _basic_sun_time(
-    d: date, latitude: float, longitude: float, tz: str, sunrise: bool
-) -> datetime:
-    """Approximate sunrise/sunset using NOAA algorithm (used if pyzmanim is not installed)."""
-    n = d.timetuple().tm_yday
-    lng_hour = longitude / 15.0
-    t = n + ((6 - lng_hour) / 24 if sunrise else (18 - lng_hour) / 24)
-    m = (0.9856 * t) - 3.289
-    L = m + 1.916 * sin(radians(m)) + 0.020 * sin(radians(2 * m)) + 282.634
-    L = L % 360
-    RA = degrees(atan(0.91764 * tan(radians(L))))
-    RA = RA % 360
-    Lquadrant = floor(L / 90) * 90
-    RAquadrant = floor(RA / 90) * 90
-    RA += Lquadrant - RAquadrant
-    RA /= 15
-    sin_dec = 0.39782 * sin(radians(L))
-    cos_dec = cos(asin(sin_dec))
-    cos_h = (cos(radians(90.833)) - (sin_dec * sin(radians(latitude)))) / (
-        cos_dec * cos(radians(latitude))
-    )
-    if cos_h > 1 or cos_h < -1:
-        raise ValueError("Sun never rises or sets on this date at this location")
-    if sunrise:
-        H = 360 - degrees(acos(cos_h))
-    else:
-        H = degrees(acos(cos_h))
-    H /= 15
-    T = H + RA - (0.06571 * t) - 6.622
-    UT = (T - lng_hour) % 24
-    hour = int(UT)
-    minute = int((UT - hour) * 60)
-    second = int((((UT - hour) * 60) - minute) * 60)
-    dt_utc = datetime.combine(d, time(hour, minute, second, tzinfo=timezone.utc))
-    return dt_utc.astimezone(ZoneInfo(tz))
 
 
 @lru_cache(maxsize=4)
 def get_daily_zmanim(target_date: date) -> dict:
     """Return a dictionary of calculated zmanim for the given date."""
     tz = LOCATION_CONFIG["timezone"]
-    if ZmanimCalendar and GeoLocation:
-        loc = GeoLocation(
-            LOCATION_CONFIG["name"],
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            ZoneInfo(tz),
+
+    def _sun_time(sunrise: bool) -> datetime:
+        n = target_date.timetuple().tm_yday
+        lng_hour = LOCATION_CONFIG["longitude"] / 15.0
+        t = n + ((6 - lng_hour) / 24 if sunrise else (18 - lng_hour) / 24)
+        m = (0.9856 * t) - 3.289
+        L = m + 1.916 * sin(radians(m)) + 0.020 * sin(radians(2 * m)) + 282.634
+        L %= 360
+        RA = degrees(atan(0.91764 * tan(radians(L))))
+        RA %= 360
+        Lquadrant = floor(L / 90) * 90
+        RAquadrant = floor(RA / 90) * 90
+        RA += Lquadrant - RAquadrant
+        RA /= 15
+        sin_dec = 0.39782 * sin(radians(L))
+        cos_dec = cos(asin(sin_dec))
+        cos_h = (cos(radians(90.833)) - (sin_dec * sin(radians(LOCATION_CONFIG["latitude"])))) / (
+            cos_dec * cos(radians(LOCATION_CONFIG["latitude"]))
         )
-        cal = ZmanimCalendar(loc)
-        cal.set_date(target_date)
-        sunrise = cal.get_sunrise()  # type: ignore[attr-defined]
-        sunset = cal.get_sunset()  # type: ignore[attr-defined]
-    else:  # pragma: no cover - fallback for tests without pyzmanim
-        sunrise = _basic_sun_time(
-            target_date,
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            tz,
-            True,
-        )
-        sunset = _basic_sun_time(
-            target_date,
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            tz,
-            False,
-        )
+        if cos_h > 1 or cos_h < -1:
+            raise ValueError("Sun never rises or sets on this date at this location")
+        H = 360 - degrees(acos(cos_h)) if sunrise else degrees(acos(cos_h))
+        H /= 15
+        T = H + RA - (0.06571 * t) - 6.622
+        UT = (T - lng_hour) % 24
+        hour = int(UT)
+        minute = int((UT - hour) * 60)
+        second = int((((UT - hour) * 60) - minute) * 60)
+        dt_utc = datetime.combine(target_date, time(hour, minute, second, tzinfo=timezone.utc))
+        return dt_utc.astimezone(ZoneInfo(tz))
+
+    sunrise = _sun_time(True)
+    sunset = _sun_time(False)
 
     dawn = sunrise - timedelta(minutes=72)
     nightfall = sunset + timedelta(minutes=18)
