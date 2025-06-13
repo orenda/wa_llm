@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime, timedelta, time, timezone
 from functools import lru_cache
@@ -9,6 +10,9 @@ from math import sin, cos, tan, acos, atan, radians, degrees, floor, asin
 from zoneinfo import ZoneInfo
 
 from config import LOCATION_CONFIG
+
+
+logger = logging.getLogger(__name__)
 
 try:
     from pyzmanim.zmanim_calendar import ZmanimCalendar
@@ -20,10 +24,13 @@ except Exception:  # pragma: no cover - library optional in tests
 try:
     from hdate import HDate, Location as HLocation
     from hdate.hebrew_date_formatter import HebrewDateFormatter
-except Exception:  # pragma: no cover - library optional in tests
+except Exception as exc:  # pragma: no cover - library optional in tests
     HDate = None
     HLocation = None
     HebrewDateFormatter = None
+    logger.warning(
+        "Failed to import hdate, Hebrew date support disabled: %s", exc
+    )
 
 
 WEEKDAYS = [
@@ -182,6 +189,8 @@ def get_hebrew_date_string(target_date: date) -> str:
     """Return formatted Hebrew date header string."""
     weekday, hebrew = _hebrew_date(target_date)
     greg = target_date.strftime("%d %B %Y")
+    if not (HDate and HebrewDateFormatter and HLocation):
+        return f"📅 מצטער, אינני יכול להציג תאריך עברי כעת. ({greg})"
     return f"📅 יום {weekday}, {hebrew} ({greg})"
 
 
