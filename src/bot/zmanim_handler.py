@@ -10,7 +10,9 @@ import logging
 from config import LOCATION_CONFIG
 
 try:
+
     from hdate import HDate, Location as HLocation, Zmanim as HZmanim
+
     from hdate.hebrew_date_formatter import HebrewDateFormatter
 except Exception:  # pragma: no cover - library optional in tests
     HDate = None
@@ -54,6 +56,7 @@ HEBREW_MONTHS = {
 @lru_cache(maxsize=4)
 def get_daily_zmanim(target_date: date) -> dict:
     """Return a dictionary of calculated zmanim for the given date."""
+
     if not (HZmanim and HLocation):
         logging.warning("hdate library not available")
         raise RuntimeError("zmanim data unavailable")
