@@ -3,26 +3,19 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta, time, timezone
+from datetime import date, datetime
 from functools import lru_cache
-from math import sin, cos, tan, acos, atan, radians, degrees, floor, asin
-from zoneinfo import ZoneInfo
 
+import logging
 from config import LOCATION_CONFIG
 
 try:
-    from pyzmanim.zmanim_calendar import ZmanimCalendar
-    from pyzmanim.util import GeoLocation
-except Exception:  # pragma: no cover - library optional in tests
-    ZmanimCalendar = None
-    GeoLocation = None
-
-try:
-    from hdate import HDate, Location as HLocation
+    from hdate import HDate, Location as HLocation, Zmanim as HZmanim
     from hdate.hebrew_date_formatter import HebrewDateFormatter
 except Exception:  # pragma: no cover - library optional in tests
     HDate = None
     HLocation = None
+    HZmanim = None
     HebrewDateFormatter = None
 
 
@@ -57,92 +50,36 @@ HEBREW_MONTHS = {
 # ---------------------------------------------------------------------------
 
 
-def _basic_sun_time(
-    d: date, latitude: float, longitude: float, tz: str, sunrise: bool
-) -> datetime:
-    """Approximate sunrise/sunset using NOAA algorithm (used if pyzmanim is not installed)."""
-    n = d.timetuple().tm_yday
-    lng_hour = longitude / 15.0
-    t = n + ((6 - lng_hour) / 24 if sunrise else (18 - lng_hour) / 24)
-    m = (0.9856 * t) - 3.289
-    L = m + 1.916 * sin(radians(m)) + 0.020 * sin(radians(2 * m)) + 282.634
-    L = L % 360
-    RA = degrees(atan(0.91764 * tan(radians(L))))
-    RA = RA % 360
-    Lquadrant = floor(L / 90) * 90
-    RAquadrant = floor(RA / 90) * 90
-    RA += Lquadrant - RAquadrant
-    RA /= 15
-    sin_dec = 0.39782 * sin(radians(L))
-    cos_dec = cos(asin(sin_dec))
-    cos_h = (cos(radians(90.833)) - (sin_dec * sin(radians(latitude)))) / (
-        cos_dec * cos(radians(latitude))
-    )
-    if cos_h > 1 or cos_h < -1:
-        raise ValueError("Sun never rises or sets on this date at this location")
-    if sunrise:
-        H = 360 - degrees(acos(cos_h))
-    else:
-        H = degrees(acos(cos_h))
-    H /= 15
-    T = H + RA - (0.06571 * t) - 6.622
-    UT = (T - lng_hour) % 24
-    hour = int(UT)
-    minute = int((UT - hour) * 60)
-    second = int((((UT - hour) * 60) - minute) * 60)
-    dt_utc = datetime.combine(d, time(hour, minute, second, tzinfo=timezone.utc))
-    return dt_utc.astimezone(ZoneInfo(tz))
-
 
 @lru_cache(maxsize=4)
 def get_daily_zmanim(target_date: date) -> dict:
     """Return a dictionary of calculated zmanim for the given date."""
-    tz = LOCATION_CONFIG["timezone"]
-    if ZmanimCalendar and GeoLocation:
-        loc = GeoLocation(
-            LOCATION_CONFIG["name"],
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            ZoneInfo(tz),
-        )
-        cal = ZmanimCalendar(loc)
-        cal.set_date(target_date)
-        sunrise = cal.get_sunrise()  # type: ignore[attr-defined]
-        sunset = cal.get_sunset()  # type: ignore[attr-defined]
-    else:  # pragma: no cover - fallback for tests without pyzmanim
-        sunrise = _basic_sun_time(
-            target_date,
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            tz,
-            True,
-        )
-        sunset = _basic_sun_time(
-            target_date,
-            LOCATION_CONFIG["latitude"],
-            LOCATION_CONFIG["longitude"],
-            tz,
-            False,
-        )
+    if not (HZmanim and HLocation):
+        logging.warning("hdate library not available")
+        raise RuntimeError("zmanim data unavailable")
 
-    dawn = sunrise - timedelta(minutes=72)
-    nightfall = sunset + timedelta(minutes=18)
-    hour_ma = (nightfall - dawn) / 12
-    hour_gra = (sunset - sunrise) / 12
+    loc = HLocation(
+        LOCATION_CONFIG["name"],
+        LOCATION_CONFIG["latitude"],
+        LOCATION_CONFIG["longitude"],
+        LOCATION_CONFIG["timezone"],
+    )
+    z = HZmanim(target_date, location=loc)
+    data = z.zmanim
 
     return {
-        "alot_hashachar": dawn,
-        "netz_hachama": sunrise,
-        "sof_zman_shema_ma": dawn + 3 * hour_ma,
-        "sof_zman_shema_gra": sunrise + 3 * hour_gra,
-        "sof_zman_tefila_ma": dawn + 4 * hour_ma,
-        "sof_zman_tefila_gra": sunrise + 4 * hour_gra,
-        "chatzot": sunrise + 6 * hour_gra,
-        "mincha_gedola": sunrise + 6.5 * hour_gra,
-        "plag_hamincha": sunrise + 10.75 * hour_gra,
-        "shkiat_hachama": sunset,
-        "tzet_hakochavim_18": nightfall,
-        "tzet_hakochavim_rt": sunset + timedelta(minutes=72),
+        "alot_hashachar": data["alot_hashachar"].local,
+        "netz_hachama": data["netz_hachama"].local,
+        "sof_zman_shema_ma": data["sof_zman_shema_mga"].local,
+        "sof_zman_shema_gra": data["sof_zman_shema_gra"].local,
+        "sof_zman_tefila_ma": data["sof_zman_tfilla_mga"].local,
+        "sof_zman_tefila_gra": data["sof_zman_tfilla_gra"].local,
+        "chatzot": data["chatzot_hayom"].local,
+        "mincha_gedola": data["mincha_gedola"].local,
+        "plag_hamincha": data["plag_hamincha"].local,
+        "shkiat_hachama": data["shkia"].local,
+        "tzet_hakochavim_18": data["tset_hakohavim"].local,
+        "tzet_hakochavim_rt": data["tset_hakohavim_rabeinu_tam"].local,
     }
 
 
