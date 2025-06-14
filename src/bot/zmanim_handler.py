@@ -7,25 +7,24 @@ import re
 from datetime import date, datetime
 from functools import lru_cache
 
-import logging
 from config import LOCATION_CONFIG
 
 
 logger = logging.getLogger(__name__)
 
 try:
-
     from hdate import HDate, Location as HLocation, Zmanim as HZmanim
-
-    from hdate.hebrew_date_formatter import HebrewDateFormatter
 except Exception as exc:  # pragma: no cover - library optional in tests
     HDate = None
     HLocation = None
     HZmanim = None
+    logger.warning("Failed to import hdate core modules: %s", exc)
+
+try:  # HebrewDateFormatter was introduced in newer versions
+    from hdate.hebrew_date_formatter import HebrewDateFormatter
+except Exception as exc:  # pragma: no cover - optional component
     HebrewDateFormatter = None
-    logger.warning(
-        "Failed to import hdate, Hebrew date support disabled: %s", exc
-    )
+    logger.warning("Failed to import HebrewDateFormatter: %s", exc)
 
 
 WEEKDAYS = [
@@ -77,20 +76,29 @@ def get_daily_zmanim(target_date: date) -> dict:
     z = HZmanim(target_date, location=loc)
     data = z.zmanim
 
-    return {
-        "alot_hashachar": data["alot_hashachar"].local,
-        "netz_hachama": data["netz_hachama"].local,
-        "sof_zman_shema_ma": data["sof_zman_shema_mga"].local,
-        "sof_zman_shema_gra": data["sof_zman_shema_gra"].local,
-        "sof_zman_tefila_ma": data["sof_zman_tfilla_mga"].local,
-        "sof_zman_tefila_gra": data["sof_zman_tfilla_gra"].local,
-        "chatzot": data["chatzot_hayom"].local,
-        "mincha_gedola": data["mincha_gedola"].local,
-        "plag_hamincha": data["plag_hamincha"].local,
-        "shkiat_hachama": data["shkia"].local,
-        "tzet_hakochavim_18": data["tset_hakohavim"].local,
-        "tzet_hakochavim_rt": data["tset_hakohavim_rabeinu_tam"].local,
+    key_map = {
+        "alot_hashachar": ["alot_hashachar", "first_light"],
+        "netz_hachama": ["netz_hachama", "sunrise"],
+        "sof_zman_shema_ma": ["sof_zman_shema_mga", "shema_eot_mga"],
+        "sof_zman_shema_gra": ["sof_zman_shema_gra", "shema_eot_gra"],
+        "sof_zman_tefila_ma": ["sof_zman_tfilla_mga", "tefila_eot_mga"],
+        "sof_zman_tefila_gra": ["sof_zman_tfilla_gra", "tefila_eot_gra"],
+        "chatzot": ["chatzot_hayom", "midday"],
+        "mincha_gedola": ["mincha_gedola", "big_mincha"],
+        "plag_hamincha": ["plag_hamincha", "plag_mincha"],
+        "shkiat_hachama": ["shkia", "sunset"],
+        "tzet_hakochavim_18": ["tset_hakohavim", "stars_out"],
+        "tzet_hakochavim_rt": ["tset_hakohavim_rabeinu_tam", "night_by_rabbeinu_tam"],
     }
+
+    result = {}
+    for target, options in key_map.items():
+        for opt in options:
+            if opt in data:
+                result[target] = data[opt].local
+                break
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -112,15 +120,7 @@ def _hebrew_date(target_date: date) -> tuple[str, str]:
         hebrew = formatter.format(hd)  # type: ignore[attr-defined]
         weekday = formatter.format_weekday(hd.weekday())  # type: ignore[attr-defined]
     else:  # pragma: no cover - simplified fallback
-        weekday = [
-            "ראשון",
-            "שני",
-            "שלישי",
-            "רביעי",
-            "חמישי",
-            "שישי",
-            "שבת",
-        ][target_date.weekday()]
+        weekday = WEEKDAYS[target_date.weekday()]
         hebrew = target_date.strftime("%d/%m/%Y")
     return weekday, hebrew
 
