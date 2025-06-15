@@ -40,13 +40,27 @@ class MessageHandler(BaseHandler):
         if not message or not message.text:
             return
 
+        bot_jid = await self.whatsapp.get_my_jid()
+
         if message.sender_jid.endswith("@lid"):
             logging.info(
                 f"Received message from {message.sender_jid}: {payload.model_dump_json()}"
             )
 
+        if message.has_mentioned(bot_jid) and "bot" in message.text.lower():
+            await self.router(message)
+
+        # Handle whatsapp links in managed groups with spam notification
+        if (
+            message.group
+            and message.group.managed
+            and message.group.notify_on_spam
+            and "https://chat.whatsapp.com/" in message.text
+        ):
+            await self.whatsapp_group_link_spam(message)
+
         # ignore messages from unmanaged groups
-        if message and message.group and not message.group.managed:
+        if message.group and not message.group.managed:
             return
 
         query = parse_zmanim_query(message.text)
@@ -62,10 +76,3 @@ class MessageHandler(BaseHandler):
             await self.send_message(message.chat_jid, response, message.message_id)
             return
 
-        bot_jid = await self.whatsapp.get_my_jid()
-        if message.has_mentioned(bot_jid) and "bot" in message.text.lower():
-            await self.router(message)
-
-        # Handle whatsapp links in group
-        if "https://chat.whatsapp.com/" in message.text:
-            await self.whatsapp_group_link_spam(message)
