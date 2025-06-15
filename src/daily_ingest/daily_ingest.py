@@ -136,12 +136,10 @@ async def load_topics(
     topics_embeddings = await voyage_embed_text(embedding_client, documents)
 
     doc_models = [
-        # TODO: Replace topic.subject with something else that is deterministic.
-        # topic.subject is not deterministic because it's the result of the LLM.
         KBTopicCreate(
             id=str(
                 hashlib.sha256(
-                    f"{group.group_jid}_{start_time}_{topic.subject}".encode()
+                    f"{group.group_jid}_{start_time}_{idx}".encode()
                 ).hexdigest()
             ),
             embedding=emb,
@@ -151,7 +149,7 @@ async def load_topics(
             summary=_deid_text(topic.summary, topic._speaker_map),
             subject=_deid_text(topic.subject, topic._speaker_map),
         )
-        for topic, emb in zip(topics, topics_embeddings)
+        for idx, (topic, emb) in enumerate(zip(topics, topics_embeddings))
     ]
     # Once we give a meaningfull ID, we should migrate to upsert!
     await bulk_upsert(db_session, [KBTopic(**doc.model_dump()) for doc in doc_models])
@@ -208,6 +206,6 @@ class topicsLoader:
         embedding_client: AsyncClient,
         whatsapp: WhatsAppClient,
     ):
-        groups = await session.exec(select(Group).where(Group.managed == True)) # noqa: E712 https://stackoverflow.com/a/18998106
+        groups = await session.exec(select(Group).where(Group.managed == True))  # noqa: E712 https://stackoverflow.com/a/18998106
         for group in list(groups.all()):
             await self.load_topics(session, group, embedding_client, whatsapp)
