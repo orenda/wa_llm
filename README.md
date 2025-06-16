@@ -25,7 +25,7 @@ A WhatsApp bot that can participate in group conversations, powered by AI. The b
 2. Copy the example environment file and update it with your credentials:
 
 ```bash
-cp src/.env.example src/.env
+cp src/.env.example .env
 ```
 
 The `src/.env.example` file lists all required variables.
