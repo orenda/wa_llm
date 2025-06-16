@@ -13,12 +13,17 @@ from config import LOCATION_CONFIG
 logger = logging.getLogger(__name__)
 
 try:
-    from hdate import HDate, Location as HLocation, Zmanim as HZmanim
-except Exception as exc:  # pragma: no cover - library optional in tests
-    HDate = None
-    HLocation = None
-    HZmanim = None
-    logger.warning("Failed to import hdate core modules: %s", exc)
+    from hdate import HDate as _HDate, Location as HLocation, Zmanim as HZmanim
+except Exception:
+    try:  # hdate >=1.1 dropped HDate in favour of HebrewDate
+        from hdate import HebrewDate as _HDate, Location as HLocation, Zmanim as HZmanim
+    except Exception as exc:  # pragma: no cover - library optional in tests
+        _HDate = None
+        HLocation = None
+        HZmanim = None
+        logger.warning("Failed to import hdate core modules: %s", exc)
+
+HDate = _HDate
 
 try:  # HebrewDateFormatter was introduced in newer versions
     from hdate.hebrew_date_formatter import HebrewDateFormatter
