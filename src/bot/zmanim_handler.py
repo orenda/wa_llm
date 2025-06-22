@@ -63,7 +63,6 @@ HEBREW_MONTHS = {
 # ---------------------------------------------------------------------------
 
 
-
 @lru_cache(maxsize=4)
 def get_daily_zmanim(target_date: date) -> dict:
     """Return a dictionary of calculated zmanim for the given date."""
@@ -144,24 +143,24 @@ def get_hebrew_date_string(target_date: date) -> str:
 # ---------------------------------------------------------------------------
 
 ZMAN_KEYWORDS = {
-    "alot_hashachar": r"עלות",
-    "netz_hachama": r"הנץ|זריחה",
-    "sof_zman_shema": r"שמע",
-    "sof_zman_tefila": r"תפילה",
-    "chatzot": r"חצות",
-    "mincha_gedola": r"מנחה גדולה",
-    "plag_hamincha": r"פלג",
-    "shkiat_hachama": r"שקיעה",
-    "tzet_hakochavim": r"צאת הכוכבים",
-    "all": r"זמני היום|כל הזמנים|זמנים",
+    "alot_hashachar": r"עלות|first\s*light|dawn|alot",
+    "netz_hachama": r"הנץ|זריחה|sunrise",
+    "sof_zman_shema": r"שמע|shema",
+    "sof_zman_tefila": r"תפילה|tefila|prayer",
+    "chatzot": r"חצות|midday|chatz(?:o|)t(?:os)?",
+    "mincha_gedola": r"מנחה גדולה|big mincha|mincha gedola",
+    "plag_hamincha": r"פלג|plag",
+    "shkiat_hachama": r"שקיעה|sunset",
+    "tzet_hakochavim": r"צאת הכוכבים|nightfall|stars",
+    "all": r"זמני היום|כל הזמנים|זמנים|zmanim",
 }
 
-TOMORROW_RE = re.compile(r"\bמחר\b")
+TOMORROW_RE = re.compile(r"\b(?:מחר|tomorrow)\b", re.I)
 
 
 def parse_zmanim_query(message_text: str) -> dict | None:
     """Detect if the message is requesting zmanim information."""
-    text = message_text.strip()
+    text = message_text.strip().lower()
     target = "tomorrow" if TOMORROW_RE.search(text) else "today"
 
     if re.search(ZMAN_KEYWORDS["all"], text):
