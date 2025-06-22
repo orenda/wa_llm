@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, datetime
 from functools import lru_cache
 
 from config import LOCATION_CONFIG
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
 
 
 logger = logging.getLogger(__name__)
@@ -61,7 +64,6 @@ HEBREW_MONTHS = {
 # ---------------------------------------------------------------------------
 # Calculation helpers
 # ---------------------------------------------------------------------------
-
 
 
 @lru_cache(maxsize=4)
@@ -144,24 +146,24 @@ def get_hebrew_date_string(target_date: date) -> str:
 # ---------------------------------------------------------------------------
 
 ZMAN_KEYWORDS = {
-    "alot_hashachar": r"עלות",
-    "netz_hachama": r"הנץ|זריחה",
-    "sof_zman_shema": r"שמע",
-    "sof_zman_tefila": r"תפילה",
-    "chatzot": r"חצות",
-    "mincha_gedola": r"מנחה גדולה",
-    "plag_hamincha": r"פלג",
-    "shkiat_hachama": r"שקיעה",
-    "tzet_hakochavim": r"צאת הכוכבים",
-    "all": r"זמני היום|כל הזמנים|זמנים",
+    "alot_hashachar": r"עלות|first\s*light|dawn|alot",
+    "netz_hachama": r"הנץ|זריחה|sunrise",
+    "sof_zman_shema": r"שמע|shema",
+    "sof_zman_tefila": r"תפילה|tefila|prayer",
+    "chatzot": r"חצות|midday|chatz(?:o|)t(?:os)?",
+    "mincha_gedola": r"מנחה גדולה|big mincha|mincha gedola",
+    "plag_hamincha": r"פלג|plag",
+    "shkiat_hachama": r"שקיעה|sunset",
+    "tzet_hakochavim": r"צאת הכוכבים|nightfall|stars",
+    "all": r"זמני היום|כל הזמנים|זמנים|zmanim",
 }
 
-TOMORROW_RE = re.compile(r"\bמחר\b")
+TOMORROW_RE = re.compile(r"\b(?:מחר|tomorrow)\b", re.I)
 
 
 def parse_zmanim_query(message_text: str) -> dict | None:
     """Detect if the message is requesting zmanim information."""
-    text = message_text.strip()
+    text = message_text.strip().lower()
     target = "tomorrow" if TOMORROW_RE.search(text) else "today"
 
     if re.search(ZMAN_KEYWORDS["all"], text):
@@ -173,6 +175,54 @@ def parse_zmanim_query(message_text: str) -> dict | None:
         if re.search(pattern, text):
             return {"type": "specific", "zman": key, "target": target}
 
+    return None
+
+
+class _LlmZmanimQuery(BaseModel):
+    """Schema for LLM-based zmanim intent extraction."""
+
+    type: str = Field(
+        description="'all' for the full list, 'specific' for a single zman, 'none' otherwise"
+    )
+    zman: str | None = Field(
+        default=None,
+        description="Name of the zman being requested if type is 'specific'",
+    )
+    target: str = Field(default="today", description="Day requested: today or tomorrow")
+
+
+async def parse_zmanim_query_llm(message_text: str) -> dict | None:
+    """Use a language model to parse zmanim queries."""
+
+    if not os.getenv("ENABLE_ZMANIM_LLM"):
+        return None
+
+    agent = Agent(
+        model="anthropic:claude-4-sonnet-20250514",
+        system_prompt="""Determine if the user is asking about zmanim times.
+Return a JSON object describing the request with these fields:
+- type: 'all', 'specific', or 'none'.
+- zman: one of alot_hashachar, netz_hachama, sof_zman_shema,
+  sof_zman_tefila, chatzot, mincha_gedola, plag_hamincha,
+  shkiat_hachama, tzet_hakochavim. Only set when type='specific'.
+- target: 'today' or 'tomorrow'. Default is today.
+If the user is not asking about zmanim, respond with type='none'.""",
+        output_type=_LlmZmanimQuery,
+    )
+
+    try:
+        res = await agent.run(message_text)
+    except Exception as exc:  # pragma: no cover - network issues
+        logger.warning("zmanim LLM parsing failed: %s", exc)
+        return None
+
+    data = res.data
+    if data.type in {"all", "specific"}:
+        return {
+            "type": data.type,
+            "zman": data.zman,
+            "target": data.target,
+        }
     return None
 
 

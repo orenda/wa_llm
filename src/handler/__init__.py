@@ -64,6 +64,11 @@ class MessageHandler(BaseHandler):
             return
 
         query = parse_zmanim_query(message.text)
+        if not query:
+            from bot.zmanim_handler import parse_zmanim_query_llm
+
+            query = await parse_zmanim_query_llm(message.text)
+
         if query:
             target_date = date.today()
             if query.get("target") == "tomorrow":
@@ -75,4 +80,3 @@ class MessageHandler(BaseHandler):
             )
             await self.send_message(message.chat_jid, response, message.message_id)
             return
-

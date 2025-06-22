@@ -21,11 +21,19 @@ from bot.zmanim_handler import (
             "מחר עלות",
             {"type": "specific", "zman": "alot_hashachar", "target": "tomorrow"},
         ),
+        ("מתי זריחה?", {"type": "specific", "zman": "netz_hachama", "target": "today"}),
         (
-            "מתי זריחה?", 
-            {"type": "specific", "zman": "netz_hachama", "target": "today"}
+            "when is sunset?",
+            {"type": "specific", "zman": "shkiat_hachama", "target": "today"},
         ),
-
+        (
+            "sunrise tomorrow",
+            {"type": "specific", "zman": "netz_hachama", "target": "tomorrow"},
+        ),
+        (
+            "all zmanim",
+            {"type": "all", "target": "today"},
+        ),
     ],
 )
 def test_parse_zmanim_query(query, expected):
