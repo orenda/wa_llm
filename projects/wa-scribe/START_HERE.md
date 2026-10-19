@@ -1,4 +1,8 @@
-# Next coding assignment: T03
+# Current coding assignment: T03 followup fixes
+
+T03 is submitted at `9f5ad6398d71ccd5903be91082dda9c14a147881` in draft PR #35. The earlier P1 outcome findings are resolved; one P1 account-display race and two P2 corner cases remain. Read the [followup review and fix assignment](docs/reviews/T03-9f5ad63.md). Continue on `cursor/wa-scribe-t03-e20a`, run all required checks and CI after fixing those cases, and return for review. The live Google gate remains blocked/unrun. Do not start T04. The initial prompt below is historical context; use the followup assignment for this iteration.
+
+## Initial T03 assignment
 
 Start from `codex/wa-scribe-t03-handoff` in `orenda/wa_llm`. That branch includes T01 and the accepted T02 commit `500480a1ac30b8d9a0cfdaa41e168a9ac1991e74`, plus its [review record](docs/reviews/T02-500480a.md). It can be used without waiting for PR #34 to merge. Work in `projects/wa-scribe/`.
 
