@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-T03 is the accepted base. Implement **T04** on top of it: owned-id Drive create/read/update, tree checks, and classified fail-before-apply / lost-response / apply-late outcomes. Live Drive protection evidence is left for owner testing.
+T04's file adapter is on its stacked branch. Implement **T05**: a non-collecting fixture diagnostic and an explicit identity probe. Real WhatsApp selector evidence is left for owner testing.

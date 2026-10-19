@@ -127,6 +127,15 @@ test("test build exchanges panel and content messages on the fixture", async () 
       requestId: "content-as-panel",
       reason: "unexpected-sender",
     });
+    const diagnostic = await readJson(fixture, "#source-diagnostic");
+    expect(diagnostic).toMatchObject({ mode: "diagnostic", rowCount: 3, placeholderCount: 1, rowsMissingId: 0 });
+    expect(JSON.stringify(diagnostic)).not.toContain("Same minute");
+    await expect(fixture.locator("#source-probe")).toHaveText("waiting");
+
+    const probed = await launched.context.newPage();
+    await probed.goto("http://127.0.0.1:4179/chat.html?probe=1");
+    const snapshot = await readJson(probed, "#source-probe");
+    expect(snapshot).toMatchObject({ ok: true, snapshot: { accountId: "acct-1", chatId: "chat-1" } });
 
     const delayed = await launched.context.newPage();
     await delayed.goto("http://127.0.0.1:4179/chat.html?replyDelay=800");
