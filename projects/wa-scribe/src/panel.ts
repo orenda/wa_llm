@@ -1,4 +1,5 @@
 import { isDriveResult, isDriveStatus, type DriveResult } from "./drive";
+import { editModeWarning } from "./lifecycle";
 import { initialPanelView, panelRequest, planPanel, type PanelView } from "./panel-state";
 import { contentHello, invalidRequest, panelPing } from "./protocol";
 import { reportExchange } from "./report";
@@ -12,6 +13,8 @@ const accountNode = document.querySelector("#account");
 const noticeNode = document.querySelector("#notice");
 const connectButton = document.querySelector("#connect");
 const probeButton = document.querySelector("#probe-run");
+const modeWarning = document.querySelector("#mode-warning");
+if (modeWarning) modeWarning.textContent = editModeWarning();
 
 let view: PanelView = initialPanelView;
 let epoch = 0;

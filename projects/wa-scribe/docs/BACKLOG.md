@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-This branch implements **T11**: stable attachment slots, opaque originals, and rejection of thumbnails and error pages. Live media kinds are left for owner testing.
+This branch implements **T12**: Edit warning, generation-scoped delete, fresh-export recovery, and rich-content markers. Live multi-chat use is left for owner testing.
