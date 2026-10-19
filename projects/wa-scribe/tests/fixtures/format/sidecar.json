@@ -1,0 +1,123 @@
+{
+  "formatVersion": 1,
+  "accountId": "acct-1",
+  "chatId": "chat-1",
+  "chatKey": "c7a18d2f",
+  "destinationId": "dest-1",
+  "generation": "g1",
+  "displayName": "Class 3A",
+  "sourceOrder": "unknown",
+  "messages": [
+    {
+      "id": "msg-100",
+      "sender": {
+        "key": "dana-1",
+        "name": "Dana"
+      },
+      "timestamp": {
+        "display": "09:41",
+        "precision": "minute",
+        "timeZone": null,
+        "instant": null
+      },
+      "sequence": "verified",
+      "text": "See you at the gate.\n## Notes\n## Transcript\n### message\n```js\nconsole.log(\"hi\")\n```\n\nsender-name: Dana\n\\keep\nשלום",
+      "limitation": null,
+      "attachments": [],
+      "sourceBaseline": "rich-v1",
+      "savedWordingBaseline": "rich-v1",
+      "blockFingerprint": "91ab204b"
+    },
+    {
+      "id": "msg-200",
+      "sender": {
+        "key": "dana-1",
+        "name": "Dana"
+      },
+      "timestamp": {
+        "display": "09:41",
+        "precision": "minute",
+        "timeZone": null,
+        "instant": null
+      },
+      "sequence": "verified",
+      "text": "See you at the gate.\n## Notes\n## Transcript\n### message\n```js\nconsole.log(\"hi\")\n```\n\nsender-name: Dana\n\\keep\nשלום",
+      "limitation": null,
+      "attachments": [],
+      "sourceBaseline": "rich-v1",
+      "savedWordingBaseline": "rich-v1",
+      "blockFingerprint": "91ab204b"
+    },
+    {
+      "id": "msg-300",
+      "sender": {
+        "key": null,
+        "name": "Omar"
+      },
+      "timestamp": {
+        "display": "Today",
+        "precision": "display-only",
+        "timeZone": null,
+        "instant": null
+      },
+      "sequence": "unknown",
+      "text": "Caption line",
+      "limitation": "album incomplete",
+      "attachments": [
+        {
+          "slot": 1,
+          "attachment": {
+            "state": "saved",
+            "name": "photo.jpg",
+            "mediaType": "image/jpeg",
+            "relativePath": "media/c7a18d2f/01.jpg"
+          }
+        },
+        {
+          "slot": 3,
+          "attachment": {
+            "state": "unavailable",
+            "limitation": "bytes were not delivered"
+          }
+        }
+      ],
+      "sourceBaseline": "caption-v2",
+      "savedWordingBaseline": "caption-v1",
+      "blockFingerprint": "b49f8012"
+    }
+  ],
+  "tombstones": [
+    {
+      "messageId": "msg-old",
+      "reason": "local-deletion"
+    }
+  ],
+  "coverage": {
+    "segments": [
+      {
+        "messageIds": [
+          "msg-100",
+          "msg-200"
+        ],
+        "anchorBefore": null,
+        "anchorAfter": null
+      },
+      {
+        "messageIds": [
+          "msg-300"
+        ],
+        "anchorBefore": "msg-200",
+        "anchorAfter": null
+      }
+    ],
+    "gaps": [
+      {
+        "afterId": "msg-200",
+        "beforeId": "msg-300",
+        "reason": "unverified-overlap"
+      }
+    ],
+    "requestedScope": "all-available",
+    "stopReason": "unverified-overlap"
+  }
+}
