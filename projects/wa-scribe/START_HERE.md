@@ -1,4 +1,8 @@
-# Next coding assignment: T03
+# Current coding assignment: T03 review fixes
+
+T03 is submitted at `aabe84dd325db8efa875222d1a2aa8dfd30a0e07` in draft PR #35. The coordinator requested changes; the live Google gate is blocked/unrun. Read the [exact-SHA review and fix assignment](docs/reviews/T03-aabe84d.md). Continue on `cursor/wa-scribe-t03-e20a`, fix only its four findings, run all required checks and CI, and return for review. Do not start T04. The initial prompt below is historical context; use the review assignment for this iteration.
+
+## Initial T03 assignment
 
 Start from `codex/wa-scribe-t03-handoff` in `orenda/wa_llm`. That branch includes T01 and the accepted T02 commit `500480a1ac30b8d9a0cfdaa41e168a9ac1991e74`, plus its [review record](docs/reviews/T02-500480a.md). It can be used without waiting for PR #34 to merge. Work in `projects/wa-scribe/`.
 
