@@ -7,7 +7,8 @@ const file = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "chat.htm
 const html = readFileSync(file);
 
 const server = createServer((request, response) => {
-  if (request.url !== "/chat.html" && request.url !== "/") {
+  const pathname = (request.url ?? "/").split("?")[0];
+  if (pathname !== "/chat.html" && pathname !== "/") {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     response.end("not found");
     return;
