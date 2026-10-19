@@ -4,11 +4,11 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: T01 accepted; T02 is the next assignment. Real WhatsApp not verified.** See the [review record](docs/reviews/T01-49b528a.md). The side panel says setup is not implemented. No chat export, Drive connection, or WhatsApp scraping is included.
+**Status: T01 and T02 accepted; T03 is the next assignment. Real WhatsApp not verified.** See the [T02 review record](docs/reviews/T02-500480a.md). The shell and pure data/Markdown codec exist; the side panel still says setup is not implemented. No chat export, Drive connection, or WhatsApp scraping is included.
 
 ## Start here
 
-- Give another coding agent [START_HERE.md](START_HERE.md): it includes the current starting branch, T02 instructions, and a copyable prompt.
+- Give another coding agent [START_HERE.md](START_HERE.md): it includes the current starting branch, T03 instructions, and a copyable prompt.
 - Coding agent: read [AGENTS.md](AGENTS.md), then execute one assignment from [the backlog](docs/BACKLOG.md).
 - Reviewer: use [the review checklist](docs/CODE_REVIEW.md) on the exact submitted commit.
 - Product contract: [spec](docs/SPEC.md), [edge cases](docs/EDGECASES.md), and [test plan](docs/TESTPLAN.md).
@@ -23,7 +23,7 @@ Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite
 
 ## Work and review
 
-The current assignment is [T02: data contracts and Markdown format](docs/tasks/T02.md). T01's shell/harness has passed review. From the repository root, enter `projects/wa-scribe/` before running project commands.
+The current assignment is [T03: Chrome identity and synthetic Drive probe](docs/tasks/T03.md). T01's shell/harness and T02's data/format codec have passed review. From the repository root, enter `projects/wa-scribe/` before running project commands.
 
 Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
 

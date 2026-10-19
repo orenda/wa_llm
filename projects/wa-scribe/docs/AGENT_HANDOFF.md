@@ -7,12 +7,17 @@ Give a smaller coding agent one bounded task at a time. Include actual filenames
 For the current coding assignment, this prompt is ready to use:
 
 ```text
-Start from codex/wa-scribe-t02-handoff in orenda/wa_llm. Work in
-projects/wa-scribe/ and read its AGENTS.md. Implement only docs/tasks/T02.md:
-pure normalized data, versioned metadata, reversible Markdown, and golden
-tests. No OAuth, scraper, Drive calls, jobs, or reconciliation engine.
+Start from codex/wa-scribe-t03-handoff in orenda/wa_llm. Work in
+projects/wa-scribe/ and read its AGENTS.md. T02 is accepted at 500480a.
+Implement only docs/tasks/T03.md: Chrome identity, account display,
+a separately clicked synthetic Drive probe, offline tests, and setup steps.
+Use only drive.file and an isolated owned test root. Keep tokens transient.
+Do not run live account operations automatically. No scraper, real chats,
+full Drive adapter, jobs, reconciliation engine, or changes to the codec.
 Run the existing typecheck, unit, browser, and build scripts and report actual
-results. Return the completion template below for coordinating-agent review.
+results. Separate mocked, live, blocked, and unrun evidence in the completion
+template below. Missing owner setup is a live gate, not a passing probe.
+Return for coordinating-agent review.
 Do not self-approve, merge, publish, or start a later ticket. Preserve unrelated work.
 ```
 

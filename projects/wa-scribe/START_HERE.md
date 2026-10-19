@@ -1,47 +1,45 @@
-# Next coding assignment: T02
+# Next coding assignment: T03
 
-This is the handoff entry point for another coding agent. Start from `codex/wa-scribe-t02-handoff` in `orenda/wa_llm`. That branch includes the accepted T01 fix commit `49b528a` and its review record; it does not require waiting for PR #33 to merge. The project is `projects/wa-scribe/` inside the repository. T02 is ready, not implemented.
+Start from `codex/wa-scribe-t03-handoff` in `orenda/wa_llm`. That branch includes T01 and the accepted T02 commit `500480a1ac30b8d9a0cfdaa41e168a9ac1991e74`, plus its [review record](docs/reviews/T02-500480a.md). It can be used without waiting for PR #34 to merge. Work in `projects/wa-scribe/`.
 
-Read the [coding rules](AGENTS.md), [T02 assignment and acceptance criteria](docs/tasks/T02.md), and [completion template](docs/AGENT_HANDOFF.md). The [T01 review](docs/reviews/T01-49b528a.md) records the accepted baseline. The [review checklist](docs/CODE_REVIEW.md) explains how the coordinating agent will review the result.
+Read [AGENTS](AGENTS.md), the [T03 assignment](docs/tasks/T03.md), and the [completion template](docs/AGENT_HANDOFF.md). T03 is ready to implement. Live Google consent and Drive behavior remain unverified.
 
 ## Copy this prompt
 
 ```text
 Repository: https://github.com/orenda/wa_llm
-Starting branch: codex/wa-scribe-t02-handoff
+Starting branch: codex/wa-scribe-t03-handoff
 Project directory: projects/wa-scribe/
 
-Read the project's AGENTS.md and docs/tasks/T02.md, including its linked
-contract sections. T01 has passed review. Implement T02 only: normalized
-message data, versioned metadata validation, a reversible Markdown codec,
-docs/FORMAT.md, and golden unit tests. Preserve Notes/prefix bytes exactly;
-keep message IDs in metadata and return explicit errors for ambiguity.
+T02 is accepted at 500480a1ac30b8d9a0cfdaa41e168a9ac1991e74.
+Read AGENTS.md and docs/tasks/T03.md, including its linked contracts.
+Implement T03 only: Chrome identity connection, authenticated account display,
+a separately clicked bounded synthetic Drive create/read/update probe,
+offline tests, and docs/GOOGLE_SETUP.md with exact owner-operated steps.
 
-Work inside projects/wa-scribe/. Keep the existing shell, toolchain, package
-files, and CI unchanged. Use a couple of compact pure TypeScript modules.
-No new dependencies, I/O, OAuth, Drive calls, DOM scraping, downloads, jobs,
-metadata reconstruction, or Download/Edit reconciliation in this task.
+Use only the drive.file OAuth scope, Chrome's token cache, a stable extension
+ID, and an isolated owned test root. No credentials in files or logs. Connect
+must not write files. Preserve unknown mutation outcomes without blind replay.
+Keep code compact, dependencies and accepted format unchanged, and Python
+files/CI untouched. No scraper, real chats, full Drive adapter, sync, or jobs.
 
-Run the existing typecheck, test:unit, test:browser, and build scripts.
-Test multiline/RTL/heading-like bodies, duplicate-looking messages, exact
-Notes preservation, invalid metadata/version/binding, and malformed Markdown.
-Automatic tests must not contact real Google or WhatsApp services.
+Run typecheck, test:unit, test:browser, and build; report actual results and
+CI at the submitted SHA. Automatic tests must not contact Google/WhatsApp.
+Prepare setup and manual probe instructions even if the owner's Chrome or
+Google configuration is unavailable. Do not claim mocks prove live OAuth.
 
-Return the completion template from docs/AGENT_HANDOFF.md: diff, commit/base
-SHA (or explicitly uncommitted), exact test commands/results/counts, and any
-blocked or unrun checks. Stop for coordinating-agent review before anyone
-depends on the new format. Do not self-approve, merge, or start later tickets.
+Return docs/AGENT_HANDOFF.md's completion report with exact base/head SHAs,
+changed behavior/files, test counts, and live/blocked/unrun evidence.
+Stop for coordinator review. Do not self-approve, merge, publish, or start T04.
 ```
 
 ## Obtain the files
 
-Use an existing authorized checkout where available. Otherwise:
+Use an existing authorized checkout, preserving local changes. Otherwise:
 
 ```bash
-git clone --branch codex/wa-scribe-t02-handoff https://github.com/orenda/wa_llm.git
+git clone --branch codex/wa-scribe-t03-handoff https://github.com/orenda/wa_llm.git
 cd wa_llm/projects/wa-scribe
 ```
 
-An existing checkout should fetch and switch to that branch while preserving its local changes. No additional Git worktree is required. The agent needs repository access if the repository is private.
-
-The package/scripts exist and were verified for T01: seven unit cases and two browser tests passed at the accepted SHA. T02 adds format cases; report the resulting counts rather than copying the baseline. Real Google connection, WhatsApp compatibility, and future tickets remain unverified.
+No additional Git worktree is required. Use the pinned Node/npm versions and existing package scripts described in [README](README.md). At accepted T02, 20 unit tests and 2 browser tests passed, along with typecheck/build. Report new actual counts rather than copying this baseline. The account owner supplies Google configuration and explicitly runs consent/probe in their Chrome; implementation can be reviewed while that live gate is blocked, but T03 cannot be called fully accepted yet.
