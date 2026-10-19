@@ -137,6 +137,12 @@ test("test build exchanges panel and content messages on the fixture", async () 
     const snapshot = await readJson(probed, "#source-probe");
     expect(snapshot).toMatchObject({ ok: true, snapshot: { accountId: "acct-1", chatId: "chat-1" } });
 
+    const downloaded = await launched.context.newPage();
+    await downloaded.goto("http://127.0.0.1:4179/chat.html?download=1");
+    const alpha = await readJson(downloaded, "#alpha-result");
+    expect(alpha).toMatchObject({ phase: "updated", ids: ["m40", "m41"] });
+    expect(JSON.stringify(alpha)).not.toContain("googleapis");
+
     const delayed = await launched.context.newPage();
     await delayed.goto("http://127.0.0.1:4179/chat.html?replyDelay=800");
     await delayed.waitForTimeout(200);
