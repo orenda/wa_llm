@@ -4,7 +4,7 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: T01 and T02 accepted; T03 is implemented and awaiting review. Real WhatsApp and live Google consent are not verified.** See the [T02 review record](docs/reviews/T02-500480a.md) and [Google setup](docs/GOOGLE_SETUP.md). The shell, data format, and synthetic Drive probe exist. Without the owner's OAuth client ID and extension public key, the panel says Google setup is missing. Chat export and WhatsApp scraping are not included.
+**Status: coded through T13 on stacked draft branches. T01 and T02 are accepted. T03 is accepted as-is. Live Google, real WhatsApp, and the pilot are left for owner testing. This is not a v1 claim.** See the [pilot checklist](docs/PILOT.md), [Google setup](docs/GOOGLE_SETUP.md), and the [T02 review record](docs/reviews/T02-500480a.md). Without the owner's OAuth client ID and extension public key, the panel says Google setup is missing. The production build does not read WhatsApp Web.
 
 ## Start here
 
@@ -23,7 +23,7 @@ Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite
 
 ## Work and review
 
-The current assignment is [T03: Chrome identity and synthetic Drive probe](docs/tasks/T03.md). T01's shell/harness and T02's data/format codec have passed review. From the repository root, enter `projects/wa-scribe/` before running project commands.
+The coding backlog through T13 is implemented. The next work is the owner checklist in [PILOT.md](docs/PILOT.md). From the repository root, enter `projects/wa-scribe/` before running project commands.
 
 Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
 
@@ -37,7 +37,7 @@ npm run test:browser
 npm run build
 ```
 
-`npm run build` writes the production unpacked extension to `dist/`. Load that directory from `chrome://extensions` with Developer mode on. `dist-test/` is the test build, which adds the local fixture origin; do not load it as the product.
+`npm run build` writes the production unpacked extension to `dist/`. Load that directory from `chrome://extensions` with Developer mode on. `dist-test/` is the test build, which adds the local fixture origin; do not load it as the product. `node scripts/package-release.mjs` zips the production `dist/` to `release/wa-scribe.zip` and does not publish.
 
 ### Evidence
 
