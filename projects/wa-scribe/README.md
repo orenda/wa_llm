@@ -4,11 +4,11 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: coded through T13 on stacked draft branches. T01 and T02 are accepted. T03 is accepted as-is. Live Google, real WhatsApp, and the pilot are left for owner testing. This is not a v1 claim.** See the [pilot checklist](docs/PILOT.md), [Google setup](docs/GOOGLE_SETUP.md), and the [T02 review record](docs/reviews/T02-500480a.md). Without the owner's OAuth client ID and extension public key, the panel says Google setup is missing. The production build does not read WhatsApp Web.
+**Status: T01 and T02 accepted; T03 has review fixes, and T04–T13 are unaccepted draft prototypes with missing integration.** See the [stack review and repair order](docs/reviews/STACK-b4ff2b8.md) and [current T03 assignment](docs/reviews/T03-9f5ad63.md). Production has no WhatsApp reader or working export; Edit/Delete remain disabled. The [pilot checklist](docs/PILOT.md) is a future checklist, not the next acceptance step. Google setup and all live checks remain unrun.
 
 ## Start here
 
-- Give another coding agent [START_HERE.md](START_HERE.md): it includes the current starting branch, T03 instructions, and a copyable prompt.
+- Give another coding agent [START_HERE.md](START_HERE.md): it includes the current T03 fix branch, review links, and a copyable prompt.
 - Coding agent: read [AGENTS.md](AGENTS.md), then execute one assignment from [the backlog](docs/BACKLOG.md).
 - Reviewer: use [the review checklist](docs/CODE_REVIEW.md) on the exact submitted commit.
 - Product contract: [spec](docs/SPEC.md), [edge cases](docs/EDGECASES.md), and [test plan](docs/TESTPLAN.md).
@@ -23,7 +23,7 @@ Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite
 
 ## Work and review
 
-The coding backlog through T13 is implemented. The next work is the owner checklist in [PILOT.md](docs/PILOT.md). From the repository root, enter `projects/wa-scribe/` before running project commands.
+The next work is the [T03 fix assignment](docs/reviews/T03-9f5ad63.md), followed by the [staged repair plan](docs/reviews/STACK-b4ff2b8.md#repair-order-and-current-assignment). Passing automatic checks does not close the later tickets' missing production or live gates. From the repository root, enter `projects/wa-scribe/` before running project commands.
 
 Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
 

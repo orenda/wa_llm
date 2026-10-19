@@ -1,6 +1,6 @@
 # Implementation backlog
 
-**T01 and T02 accepted. T03 is accepted as-is on PR #35 by owner direction; live Google and WhatsApp checks remain owner testing.** T02 was reviewed at `500480a1ac30b8d9a0cfdaa41e168a9ac1991e74`; see the [review and test evidence](reviews/T02-500480a.md). T01's [accepted review](reviews/T01-49b528a.md) remains the shell baseline. No real WhatsApp/Drive verification is recorded. Work in `projects/wa-scribe/` inside the `wa_llm` repository.
+**T01 and T02 accepted. T03 findings remain; T04–T13 are unaccepted drafts, with correctness fixes and production integration outstanding.** See the [exact-SHA stack review and repair order](reviews/STACK-b4ff2b8.md). T02's [review](reviews/T02-500480a.md) and T01's [review](reviews/T01-49b528a.md) remain the accepted baselines. No real WhatsApp/Drive verification is recorded. Work in `projects/wa-scribe/` inside the `wa_llm` repository. The coordinator reviews each new SHA; a handoff's completion label does not establish that its requirements were implemented or tested.
 
 Product behavior is defined by [SPEC](SPEC.md), [TESTPLAN](TESTPLAN.md), and the [42 edge cases](EDGECASES.md). This backlog orders the work; it does not weaken those contracts. Local-folder export, agents, model calls, and message sending are outside the initial Drive delivery.
 
@@ -8,7 +8,7 @@ Product behavior is defined by [SPEC](SPEC.md), [TESTPLAN](TESTPLAN.md), and the
 | --- | --- | --- | --- |
 | T01 | Extension skeleton and executable test harness — accepted | None | [Accepted review](reviews/T01-49b528a.md); strict check/build and real unpacked-extension interaction on a fixture. |
 | T02 | [Data contracts and reversible Markdown format — accepted](tasks/T02.md) | T01 | [Accepted codec review](reviews/T02-500480a.md); golden round trips, prefix preservation, metadata validation, canonical attachment fields, and strict known instants. |
-| T03 | [Chrome identity connection and synthetic Drive probe — accepted as-is](tasks/T03.md) | T01 | Connect action; stable dev extension/OAuth setup guide; shown account. Live consent/probe is left for owner testing. |
+| T03 | [Chrome identity connection and synthetic Drive probe — changes requested](tasks/T03.md) | T01 | [Remaining review findings](reviews/T03-9f5ad63.md), then authorized live consent/Drive evidence. |
 | T04 | Minimal Drive file adapter and known/unknown operation outcomes | T02, T03 API shape | Create/read/update by owned IDs, tree-boundary checks, classified failures. Fake tests for fail-before-apply, apply-then-lose-response, apply-late. Live protection evidence remains a gate. C02–C04, C06, C08, C10. |
 | T05 | WhatsApp selectors, virtualized fixture, and bounded identity probe | T01, T02 | Non-collecting diagnostic separated from explicit selected-chat probe. Account/chat/message IDs and source order verified or rejected, not invented from the fixture. H09–H10, M03. |
 | T06 | Download reconciliation | T02 | New/old/middle insertion, same-timestamp distinct IDs, repeated-pass dedupe, byte-preserved Notes, whole-block tombstones. H01–H03, H06–H09, X04. |
@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-This branch implements **T13**: the edge-case catalog, a local release zip, and the owner pilot checklist. The pilot has not been run and is left for owner testing.
+Fix **T03 only**, continuing on `cursor/wa-scribe-t03-e20a` from `9f5ad6398d71ccd5903be91082dda9c14a147881`, using its [three-finding assignment](reviews/T03-9f5ad63.md). Return for review with checks and exact SHA. Keep the later draft branches; repair and restack them in the [reviewed dependency order](reviews/STACK-b4ff2b8.md#repair-order-and-current-assignment). The ZIP/catalog/checklist are draft artifacts, not a completed T13 or a pilot pass.

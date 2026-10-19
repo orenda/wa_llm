@@ -1,6 +1,6 @@
 # Owner pilot checklist
 
-This checklist is for David. It has not been run. Coding for T04 through T13 is on stacked draft branches. Automated unit and browser checks use fixtures and fakes. They are not a pilot pass, not live OAuth, and not a v1 claim.
+This checklist is for David. It has not been run. T04 through T13 are unaccepted draft prototypes; the [stack review](reviews/STACK-b4ff2b8.md) identifies correctness fixes and missing production integration. Repair/review comes before this pilot. Automated unit and browser checks use fixtures and fakes. They are not a pilot pass, not live OAuth, and not a v1 claim.
 
 The production panel can connect Google Drive and run the synthetic Drive probe after the setup below. It shows the Edit warning. **Edit selected chat** and **Delete export** stay disabled. The production build does not register a content script, so it does not read WhatsApp Web. The coded reader understands the fixture page's `data-account-id`, `data-chat-id`, and message attributes. It does not contain WhatsApp Web's real selectors. Fixture Download (`?download=1` on the test build) does not call Google.
 
