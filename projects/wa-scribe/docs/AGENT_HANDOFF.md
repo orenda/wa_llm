@@ -4,17 +4,16 @@ Give a smaller coding agent one bounded task at a time. Include actual filenames
 
 ## Assignment template
 
-For the first coding assignment, this prompt is ready to use:
+For the current coding assignment, this prompt is ready to use:
 
 ```text
-Work in projects/wa-scribe/ inside wa_llm. Read that project's AGENTS.md and
-keep changes within its assigned paths. Then implement only
-docs/tasks/T01.md and its referenced contract sections. The existing npm
-commands are targets to create, not passing checks. Keep the shell and
-harness small. Do not implement OAuth, a scraper, Drive writes, or sync.
-Run and report the actual checks, inspect the diff, and return the completion
-template below for coordinating-agent review. Do not self-approve, merge,
-publish, or start T02. Preserve unrelated work.
+Start from codex/wa-scribe-t02-handoff in orenda/wa_llm. Work in
+projects/wa-scribe/ and read its AGENTS.md. Implement only docs/tasks/T02.md:
+pure normalized data, versioned metadata, reversible Markdown, and golden
+tests. No OAuth, scraper, Drive calls, jobs, or reconciliation engine.
+Run the existing typecheck, unit, browser, and build scripts and report actual
+results. Return the completion template below for coordinating-agent review.
+Do not self-approve, merge, publish, or start a later ticket. Preserve unrelated work.
 ```
 
 For later tickets, fill this template using accepted interfaces:

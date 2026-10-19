@@ -1,13 +1,13 @@
 # Implementation backlog
 
-**All tickets are planned. No implementation, acceptance, or live verification is recorded.** Work in `projects/wa-scribe/` inside the `wa_llm` repository. These are compact assignments for coding agents; the coordinating agent reviews each submitted SHA before dependent work proceeds.
+**T01 accepted; T02 ready; later tickets remain planned.** T01 was reviewed at `49b528aa1b67e86e89ab15e51aa073926b79e61e`; see the [review and test evidence](reviews/T01-49b528a.md). No real WhatsApp/Drive verification is recorded. Work in `projects/wa-scribe/` inside the `wa_llm` repository. The coordinating agent reviews each submitted SHA before dependent work proceeds.
 
 Product behavior is defined by [SPEC](SPEC.md), [TESTPLAN](TESTPLAN.md), and the [42 edge cases](EDGECASES.md). This backlog orders the work; it does not weaken those contracts. Local-folder export, agents, model calls, and message sending are outside the initial Drive delivery.
 
 | ID | Deliverable | Depends on | Minimum acceptance evidence |
 | --- | --- | --- | --- |
-| T01 | Extension skeleton and executable test harness | None | [Exact assignment](tasks/T01.md); strict check/build and real unpacked-extension interaction on a fixture. |
-| T02 | Normalized observation types, versioned metadata, reversible Markdown grammar | T01 | Golden round trips; multiline/RTL/heading-like bodies; Notes preserved; identity/order uncertainty explicit. Coordinator reviews contracts before other modules depend on them. |
+| T01 | Extension skeleton and executable test harness — accepted | None | [Accepted review](reviews/T01-49b528a.md); strict check/build and real unpacked-extension interaction on a fixture. |
+| T02 | [Data contracts and reversible Markdown format — ready](tasks/T02.md) | T01 | Golden round trips; multiline/RTL/heading-like bodies; Notes preserved; identity/order uncertainty explicit. Coordinator reviews contracts before other modules depend on them. |
 | T03 | Chrome identity connection and synthetic Drive probe | T01 | Connect action; stable dev extension/OAuth setup guide; shown account; explicit real consent/probe separated from mocked tests. No private content. |
 | T04 | Minimal Drive file adapter and known/unknown operation outcomes | T02, T03 API shape | Create/read/update by owned IDs, tree-boundary checks, classified failures. Fake tests for fail-before-apply, apply-then-lose-response, apply-late. Live protection evidence remains a gate. C02–C04, C06, C08, C10. |
 | T05 | WhatsApp selectors, virtualized fixture, and bounded identity probe | T01, T02 | Non-collecting diagnostic separated from explicit selected-chat probe. Account/chat/message IDs and source order verified or rejected, not invented from the fixture. H09–H10, M03. |
@@ -31,6 +31,6 @@ Split a ticket further if its diff stops being reviewable. Subtickets keep the p
 
 The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 waits for T02's accepted types; after T02 acceptance, T04/T06 can run in parallel with clear file ownership and T04's listed API-shape dependency respected. Live gates can remain blocked while offline contract/recovery work continues; an unrun gate is never accepted as a pass.
 
-## Initial assignment
+## Current assignment
 
-Start with **T01 only**. Its result should be small enough to inspect in one review. Package commands and application tests do not exist before that ticket. Do not write the real WhatsApp scraper, OAuth implementation, or sync engine as part of bootstrapping.
+Implement **T02 only** using its [detailed assignment](tasks/T02.md). The package scripts and T01 harness now exist. Keep this step to pure data/metadata/Markdown modules and meaningful tests; no scraper, OAuth, Drive writes, or reconciliation engine. Return for review before downstream work starts.
