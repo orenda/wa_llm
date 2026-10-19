@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-T04's file adapter is on its stacked branch. Implement **T05**: a non-collecting fixture diagnostic and an explicit identity probe. Real WhatsApp selector evidence is left for owner testing.
+T06 Download reconciliation is on its stacked branch. Implement **T07**: Edit applies observed wording, keeps local conflicts, and removes only positively deleted messages.
