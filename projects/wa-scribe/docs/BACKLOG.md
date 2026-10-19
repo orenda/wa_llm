@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-This branch implements **T08**: a per-chat journal that can crash between transcript, metadata, and cleanup, and that refuses a newer generation while an older mutation is unknown.
+This branch implements **T09**: one writer per profile, a frozen upper anchor, and separate source-disconnect and Drive-disconnect states. Restart does not resume collection.
