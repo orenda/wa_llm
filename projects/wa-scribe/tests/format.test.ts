@@ -9,7 +9,7 @@ import {
   renderTranscript,
   type CodecResult,
 } from "../src/format";
-import type { AttachmentSlot, Binding, ExportDraft, MessageDraft, Timestamp } from "../src/model";
+import type { AttachmentSlot, Binding, ExportDraft, MessageDraft, TimePrecision, Timestamp } from "../src/model";
 
 const binding: Binding = { accountId: "acct-1", chatId: "chat-1", destinationId: "dest-1", generation: "g1" };
 
@@ -268,7 +268,7 @@ describe("parse failures", () => {
       text: "file",
     });
     const instant = message({
-      timestamp: { display: "09:41:08", precision: "instant", timeZone: "Asia/Jerusalem", instant: "2026-10-19T06:41:08Z" },
+      timestamp: { display: "09:41:08", precision: "instant", timeZone: "Asia/Jerusalem", instant: "2026-10-19T06:41:08.000Z" },
     });
     const single = (entry: MessageDraft): ExportDraft => ({
       ...binding,
@@ -292,6 +292,99 @@ describe("parse failures", () => {
       relativePath: "media/c7a18d2f/blob.bin",
     });
     const savedInstant = unwrap(encodeExport("", single(instant)));
-    expect(unwrap(parseTranscript(savedInstant.markdown)).blocks[0]?.timestamp.instant).toBe("2026-10-19T06:41:08Z");
+    expect(unwrap(parseTranscript(savedInstant.markdown)).blocks[0]?.timestamp.instant).toBe("2026-10-19T06:41:08.000Z");
+  });
+});
+
+describe("known timestamps and attachment order", () => {
+  const known = "2026-10-19T06:41:08.000Z";
+
+  function at(instant: string | null, precision: TimePrecision = "instant"): MessageDraft {
+    return message({
+      timestamp: {
+        display: precision === "unknown" ? "" : "09:41:08",
+        precision,
+        timeZone: precision === "instant" ? "UTC" : null,
+        instant,
+      },
+    });
+  }
+
+  function verified(entry: MessageDraft): ExportDraft {
+    return {
+      ...binding,
+      chatKey: "c7a18d2f",
+      displayName: "Class 3A",
+      sourceOrder: "verified",
+      messages: [entry],
+      tombstones: [],
+      coverage: {
+        segments: [{ messageIds: [entry.id], anchorBefore: null, anchorAfter: null }],
+        gaps: [],
+        requestedScope: "all-available",
+        stopReason: null,
+      },
+    };
+  }
+
+  it("keeps a canonical instant and an explicit unknown timestamp", () => {
+    const rendered = unwrap(renderTranscript("", [at(known), at(null, "unknown")]));
+    const parsed = unwrap(parseTranscript(rendered));
+    expect(parsed.blocks[0]?.timestamp.instant).toBe(known);
+    expect(parsed.blocks[0]?.timestamp.precision).toBe("instant");
+    expect(parsed.blocks[1]?.timestamp).toEqual({ display: "", precision: "unknown", timeZone: null, instant: null });
+    const exported = unwrap(encodeExport("", verified(at(known))));
+    expect(unwrap(decodeMetadata(exported.metadata, binding)).messages[0]?.timestamp.instant).toBe(known);
+  });
+
+  it("rejects invalid known instants at render, parse, and metadata boundaries", () => {
+    const rejected = [
+      "not-a-timestamp",
+      "Invalid Date",
+      "NaN",
+      "2026-10-19T25:00:00.000Z",
+      "2026-02-31T00:00:00.000Z",
+      "2026-10-19T06:41:08Z",
+      "2026-10-19T06:41:08+00:00",
+    ];
+    const good = unwrap(renderTranscript("", [at(known)]));
+    const goodMeta = unwrap(encodeExport("", verified(at(known)))).metadata;
+    for (const instant of rejected) {
+      expect(renderTranscript("", [at(instant)])).toMatchObject({ ok: false, reason: "malformed-markdown" });
+      const markdown = good.replace(known, instant);
+      expect(parseTranscript(markdown)).toEqual({ ok: false, outcome: "parse-error", reason: "malformed-markdown", input: markdown });
+      const metadata = goodMeta.replaceAll(known, instant);
+      expect(decodeMetadata(metadata, binding)).toMatchObject({ ok: false, outcome: "recovery-required", reason: "missing-state", input: metadata });
+    }
+  });
+
+  it("serializes the same attachment when its property order changes", () => {
+    const ordered = message({
+      id: "msg-900",
+      text: "file",
+      attachments: [{ slot: 1, attachment: { state: "saved", name: "photo.jpg", mediaType: "image/jpeg", relativePath: "media/c7a18d2f/01.jpg" } }],
+    });
+    const shuffled = message({
+      id: "msg-900",
+      text: "file",
+      attachments: [
+        {
+          attachment: { relativePath: "media/c7a18d2f/01.jpg", mediaType: "image/jpeg", name: "photo.jpg", state: "saved" },
+          slot: 1,
+        },
+      ],
+    });
+    const left = unwrap(encodeExport("", verified(ordered)));
+    const right = unwrap(encodeExport("", verified(shuffled)));
+    expect(right.markdown).toBe(left.markdown);
+    expect(right.metadata).toBe(left.metadata);
+    expect(right.markdown).toContain('attachment: 1 {"state":"saved","name":"photo.jpg","mediaType":"image/jpeg","relativePath":"media/c7a18d2f/01.jpg"}');
+    const parsed = unwrap(parseTranscript(right.markdown));
+    expect(parsed.blocks[0]?.attachments).toEqual([
+      { slot: 1, attachment: { state: "saved", name: "photo.jpg", mediaType: "image/jpeg", relativePath: "media/c7a18d2f/01.jpg" } },
+    ]);
+    expect(unwrap(decodeMetadata(right.metadata, binding)).messages[0]?.attachments).toEqual(parsed.blocks[0]?.attachments);
+    const again = unwrap(encodeExport("", verified(message({ ...shuffled, attachments: parsed.blocks[0]?.attachments ?? [] }))));
+    expect(again.metadata).toBe(right.metadata);
   });
 });

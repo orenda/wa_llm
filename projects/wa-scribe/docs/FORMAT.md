@@ -38,7 +38,7 @@ attachment: <slot> <json>           # zero or more, slot order kept
 
 Header order is fixed. Unknown headers, duplicate slots, and a missing blank line before the body are parse errors. Slot numbers are integers `>= 1`. Missing numbers are not filled in: slots 1 and 3 may be saved while 2 is absent.
 
-`time-precision` records what was actually observed. `instant` is present only for `instant`. Minute, date, display-only, and unknown values do not gain seconds, a zone, or a UTC offset. `sequence: unknown` does not become source order.
+`time-precision` records what was actually observed. `instant` is present only for `instant`, and then only as a canonical UTC value `YYYY-MM-DDTHH:mm:ss.sssZ` that `Date` parses unchanged. Unparseable strings, `NaN`, `Invalid Date`, overflowed calendar values, and other spellings such as `Z` without milliseconds or a `+00:00` offset are rejected. The codec does not rewrite them as `unknown` or fill in a default. Minute, date, display-only, and unknown values do not gain seconds, a zone, or a UTC offset. `sequence: unknown` does not become source order.
 
 Body lines are joined with `\n`. The codec escapes only a body line that is exactly `### message`, exactly `## Transcript`, or already starts with `\`, by prefixing one `\`. On parse, a leading `\` is removed only when the remainder is one of those two sentinels or itself starts with `\`. Any other leading `\`, such as `\nope`, is a parse error. Header values use a different escape: `\\`, `\n`, and `\r`. That keeps a sender name on one physical line. A CR in message text is rejected rather than converted.
 
@@ -52,7 +52,7 @@ Attachment JSON is one object:
 | `opaque` | `name`, `mediaType` (or null), `relativePath` | Original bytes kept without a known type |
 | `saved` | `name`, `mediaType`, `relativePath` | Delivered original stored at that path |
 
-Paths are relative to the export root. The codec rejects absolute paths, backslashes, `.` or `..` segments, colons, queries, and `://`. It does not invent a file, a link, or a successful download.
+Paths are relative to the export root. The codec rejects absolute paths, backslashes, `.` or `..` segments, colons, queries, and `://`. It does not invent a file, a link, or a successful download. Markdown and sidecar output write each attachment with a fixed field order, so the input object's key order does not change the bytes.
 
 ## Sidecar
 

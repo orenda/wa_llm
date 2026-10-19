@@ -156,11 +156,47 @@ function attachmentOk(attachment: Attachment): boolean {
   return isMediaType(attachment.mediaType);
 }
 
+function canonicalAttachment(attachment: Attachment): Attachment {
+  if (attachment.state === "pending" || attachment.state === "unavailable") return { state: attachment.state, limitation: attachment.limitation };
+  if (attachment.state === "unsupported") return { state: "unsupported", detail: attachment.detail };
+  if (attachment.state === "opaque")
+    return { state: "opaque", name: attachment.name, mediaType: attachment.mediaType, relativePath: attachment.relativePath };
+  return { state: "saved", name: attachment.name, mediaType: attachment.mediaType, relativePath: attachment.relativePath };
+}
+
+function attachmentJson(attachment: Attachment): string {
+  return JSON.stringify(canonicalAttachment(attachment));
+}
+
+function canonicalAttachments<T extends MessageDraft>(message: T): T {
+  return {
+    ...message,
+    attachments: message.attachments.map((entry) => ({ slot: entry.slot, attachment: canonicalAttachment(entry.attachment) })),
+  };
+}
+
+function sameSlots(left: readonly AttachmentSlot[], right: readonly AttachmentSlot[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const first = left[index];
+    const second = right[index];
+    if (first === undefined || second === undefined || first.slot !== second.slot || attachmentJson(first.attachment) !== attachmentJson(second.attachment))
+      return false;
+  }
+  return true;
+}
+
+function knownInstantOk(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+}
+
 function timestampOk(timestamp: Timestamp): boolean {
   if (!isPrecision(timestamp.precision)) return false;
   if (timestamp.precision !== "unknown" && timestamp.display === "") return false;
   if (timestamp.timeZone === "") return false;
-  if (timestamp.precision === "instant") return timestamp.instant !== null && timestamp.instant.length > 0;
+  if (timestamp.precision === "instant") return timestamp.instant !== null && knownInstantOk(timestamp.instant);
   return timestamp.instant === null;
 }
 
@@ -198,7 +234,7 @@ function renderBlock(message: MessageDraft): string | null {
   if (message.timestamp.instant !== null) lines.push(`instant: ${escapeHeader(message.timestamp.instant)}`);
   lines.push(`sequence: ${message.sequence}`);
   if (message.limitation !== null) lines.push(`limitation: ${escapeHeader(message.limitation)}`);
-  for (const entry of message.attachments) lines.push(`attachment: ${entry.slot} ${JSON.stringify(entry.attachment)}`);
+  for (const entry of message.attachments) lines.push(`attachment: ${entry.slot} ${attachmentJson(entry.attachment)}`);
   lines.push("");
   if (message.text !== "") {
     for (const line of message.text.split("\n")) lines.push(escapeBodyLine(line));
@@ -396,7 +432,7 @@ function sameVisible(block: ParsedBlock, message: MessageDraft): boolean {
     block.timestamp.precision === message.timestamp.precision &&
     block.timestamp.timeZone === message.timestamp.timeZone &&
     block.timestamp.instant === message.timestamp.instant &&
-    JSON.stringify(block.attachments) === JSON.stringify(message.attachments)
+    sameSlots(block.attachments, message.attachments)
   );
 }
 
@@ -477,7 +513,7 @@ function documentFrom(chat: ChatExport): Record<string, unknown> {
     generation: chat.generation,
     displayName: chat.displayName,
     sourceOrder: chat.sourceOrder,
-    messages: chat.messages,
+    messages: chat.messages.map(canonicalAttachments),
     tombstones: chat.tombstones,
     coverage: chat.coverage,
   };
@@ -500,7 +536,9 @@ export function encodeExport(prefix: string, draft: ExportDraft): CodecResult<{ 
   const parsed = parseTranscript(rendered.value);
   if (!parsed.ok || parsed.value.prefix !== prefix || parsed.value.blocks.length !== draft.messages.length)
     return fail("parse-error", "malformed-markdown", prefix);
-  const messages = draft.messages.map((message, index) => ({ ...message, blockFingerprint: parsed.value.blocks[index]!.blockFingerprint }));
+  const messages = draft.messages.map((message, index) =>
+    canonicalAttachments({ ...message, blockFingerprint: parsed.value.blocks[index]!.blockFingerprint }),
+  );
   const chat: ChatExport = { ...draft, formatVersion: FORMAT_VERSION, messages };
   const metadata = encodeMetadata(chat);
   if (!metadata.ok) return { ...metadata, input: metadata.input || prefix };
