@@ -2,6 +2,10 @@
 
 A WhatsApp bot that can participate in group conversations, powered by AI. The bot monitors group messages and responds when mentioned.
 
+## Other projects
+
+[wa-scribe](projects/wa-scribe/README.md) is a separate Chrome extension project in this repository. Its specifications, coding-agent instructions, task backlog, and review process live under `projects/wa-scribe/`.
+
 ## Features
 
 - Automated group chat responses when mentioned
