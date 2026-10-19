@@ -88,6 +88,18 @@ export function containsSignedUrl(value: string): boolean {
   return value.includes("://");
 }
 
+export function acceptRevision(captured: string, current: string, tombstoned: boolean): { link: true } | { deferred: "revision-changed" } | { suppressed: true } {
+  if (tombstoned) return { suppressed: true };
+  if (captured !== current) return { deferred: "revision-changed" };
+  return { link: true };
+}
+
+export function classifyMissingFile(filePresent: boolean, tombstoned: boolean): { availability: "saved" | "missing-bytes" | "suppressed"; messageDeleted: false } {
+  if (tombstoned) return { availability: "suppressed", messageDeleted: false };
+  if (!filePresent) return { availability: "missing-bytes", messageDeleted: false };
+  return { availability: "saved", messageDeleted: false };
+}
+
 export function sampleErrorPage(): Uint8Array {
   return encoder.encode("<!doctype html><title>login</title>");
 }
