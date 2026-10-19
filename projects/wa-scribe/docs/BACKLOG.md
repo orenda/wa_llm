@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-T06 Download reconciliation is on its stacked branch. Implement **T07**: Edit applies observed wording, keeps local conflicts, and removes only positively deleted messages.
+This branch implements **T07**: Edit applies observed source wording, keeps a locally edited block as a conflict, and removes a message only when deletion was positively observed.
