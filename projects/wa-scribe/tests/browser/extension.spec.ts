@@ -3,11 +3,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium, expect, test, type BrowserContext, type Page, type Worker } from "@playwright/test";
 import { PROTOCOL } from "../../src/protocol";
+import { isAllowedTestRequest } from "../network-policy";
 
-const LIVE = /web\.whatsapp\.com|googleapis\.com|accounts\.google\.com|google\.com\/drive/;
+const DRIVE_FILE = "https://drive.google.com/file/example";
 
-async function launch(extensionDir: string): Promise<{ context: BrowserContext; worker: Worker; cleanup: () => void }> {
+async function launch(
+  extensionDir: string,
+): Promise<{ context: BrowserContext; worker: Worker; blocked: string[]; cleanup: () => void }> {
   const userDataDir = mkdtempSync(path.join(tmpdir(), "wa-scribe-"));
+  const blocked: string[] = [];
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     args: [
@@ -17,11 +21,20 @@ async function launch(extensionDir: string): Promise<{ context: BrowserContext; 
     ],
     ignoreDefaultArgs: ["--disable-extensions"],
   });
-  await context.route(LIVE, (route) => route.abort("blockedbyclient"));
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (isAllowedTestRequest(url)) {
+      await route.continue();
+      return;
+    }
+    blocked.push(url);
+    await route.abort("blockedbyclient");
+  });
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
   return {
     context,
     worker,
+    blocked,
     cleanup: () => {
       rmSync(userDataDir, { recursive: true, force: true });
     },
@@ -29,9 +42,22 @@ async function launch(extensionDir: string): Promise<{ context: BrowserContext; 
 }
 
 async function readJson(page: Page, selector: string): Promise<unknown> {
-  await expect(page.locator(selector)).not.toHaveText("");
-  const text = await page.locator(selector).innerText();
-  return JSON.parse(text) as unknown;
+  const locator = page.locator(selector);
+  let reply: unknown;
+  await expect
+    .poll(
+      async () => {
+        try {
+          reply = JSON.parse((await locator.innerText()).trim());
+          return "ready";
+        } catch {
+          return "pending";
+        }
+      },
+      { timeout: 10_000 },
+    )
+    .toBe("ready");
+  return reply;
 }
 
 test("production extension loads without fixture access", async () => {
@@ -96,6 +122,28 @@ test("test build exchanges panel and content messages on the fixture", async () 
       requestId: "content-as-panel",
       reason: "unexpected-sender",
     });
+
+    const delayed = await launched.context.newPage();
+    await delayed.goto("http://127.0.0.1:4179/chat.html?replyDelay=800");
+    await delayed.waitForTimeout(200);
+    await expect(delayed.locator("#content-ack")).toHaveText("waiting");
+    expect(await readJson(delayed, "#content-ack")).toEqual({
+      protocol: PROTOCOL,
+      type: "content-ack",
+      requestId: "content-hello",
+      context: "content",
+    });
+
+    const driveFetch = await fixture.evaluate(async (url) => {
+      try {
+        await fetch(url);
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    }, DRIVE_FILE);
+    expect(driveFetch).toBe("blocked");
+    expect(launched.blocked.some((url) => url.startsWith("https://drive.google.com/file/"))).toBe(true);
 
     const liveNavigation = await fixture.goto("https://web.whatsapp.com/").then(
       () => "allowed",
