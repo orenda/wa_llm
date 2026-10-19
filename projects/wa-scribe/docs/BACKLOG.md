@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-This branch implements **T10**: a one-chat text Download alpha on the fixture. It does not call Google and it is not a v1 claim. Live Drive and WhatsApp passes are left for owner testing.
+This branch implements **T11**: stable attachment slots, opaque originals, and rejection of thumbnails and error pages. Live media kinds are left for owner testing.
