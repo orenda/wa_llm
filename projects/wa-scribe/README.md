@@ -4,7 +4,7 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: T01 and T02 accepted; T03 is the next assignment. Real WhatsApp not verified.** See the [T02 review record](docs/reviews/T02-500480a.md). The shell and pure data/Markdown codec exist; the side panel still says setup is not implemented. No chat export, Drive connection, or WhatsApp scraping is included.
+**Status: T01 and T02 accepted; T03 is implemented and awaiting review. Real WhatsApp and live Google consent are not verified.** See the [T02 review record](docs/reviews/T02-500480a.md) and [Google setup](docs/GOOGLE_SETUP.md). The shell, data format, and synthetic Drive probe exist. Without the owner's OAuth client ID and extension public key, the panel says Google setup is missing. Chat export and WhatsApp scraping are not included.
 
 ## Start here
 

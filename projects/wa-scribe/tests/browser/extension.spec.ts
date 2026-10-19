@@ -78,7 +78,12 @@ test("production extension loads without fixture access", async () => {
     const extensionId = launched.worker.url().split("/")[2];
     const panel = await launched.context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/panel.html`);
-    await expect(panel.locator("#status")).toHaveText("Setup is not implemented.");
+    await expect(panel.locator("#status")).toHaveText(
+      "Google setup is missing. Set the OAuth client ID and extension public key, then rebuild.",
+    );
+    await expect(panel.locator("#connect")).toBeDisabled();
+    await expect(panel.locator("#probe-run")).toBeDisabled();
+    expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
     expect(await readJson(panel, "#panel-pong")).toEqual({
       protocol: PROTOCOL,
       type: "panel-pong",

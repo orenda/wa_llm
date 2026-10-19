@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type UserConfig } from "vite";
 import { createManifest, type ExtensionTarget } from "./src/manifest.ts";
+import { publicOAuth } from "./src/public-config.ts";
 
 type Entry = "background" | "content" | "panel";
 
@@ -11,16 +12,24 @@ function readEntry(): Entry {
   throw new Error("Set WA_ENTRY to background, content, or panel. Use npm run build.");
 }
 
+const bakedClientId = JSON.stringify(process.env.WA_SCRIBE_OAUTH_CLIENT_ID ?? "");
+const bakedExtensionKey = JSON.stringify(process.env.WA_SCRIBE_EXTENSION_KEY ?? "");
+
 export default defineConfig(({ mode }): UserConfig => {
   const entry = readEntry();
   const target: ExtensionTarget = mode === "test" ? "test" : "production";
   const outDir = target === "test" ? "dist-test" : "dist";
   const root = process.cwd();
+  const define = {
+    WA_SCRIBE_OAUTH_CLIENT_ID: bakedClientId,
+    WA_SCRIBE_EXTENSION_KEY: bakedExtensionKey,
+  };
 
   if (entry === "panel") {
     return {
       base: "./",
       publicDir: false,
+      define,
       build: {
         outDir,
         emptyOutDir: false,
@@ -54,7 +63,7 @@ export default defineConfig(({ mode }): UserConfig => {
             mkdirSync(directory, { recursive: true });
             writeFileSync(
               resolve(directory, "manifest.json"),
-              `${JSON.stringify(createManifest(target), null, 2)}\n`,
+              `${JSON.stringify(createManifest(target, publicOAuth(process.env)), null, 2)}\n`,
             );
           },
         },
@@ -65,6 +74,7 @@ export default defineConfig(({ mode }): UserConfig => {
   return {
     base: "./",
     publicDir: false,
+    define,
     build: {
       outDir,
       emptyOutDir: entry === "background",
