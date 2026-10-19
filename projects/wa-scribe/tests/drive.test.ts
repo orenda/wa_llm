@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   DRIVE_FILE_SCOPE,
+  DRIVE_PROTOCOL,
   PROBE_JSON,
   PROBE_MARKDOWN,
   PROBE_MARKDOWN_UPDATED,
   PROBE_MEDIA,
   classifyIdentityError,
   connectDrive,
+  dispatchDrive,
   panelCopy,
   runProbe,
+  unresolvedKey,
   type DriveAccount,
   type HttpClient,
   type HttpRequest,
@@ -19,6 +22,7 @@ import {
   type TokenResult,
 } from "../src/drive";
 import { readProbeRecord } from "../src/chrome-drive";
+import { MAX_BUSY_POLLS, initialPanelView, panelRequest, planPanel } from "../src/panel-state";
 import { oauthReady, type PublicOAuth } from "../src/public-config";
 
 const config: PublicOAuth = {
@@ -196,17 +200,29 @@ describe("drive probe", () => {
   });
 
   it("stops on HTTP errors and invalid JSON without a success result", async () => {
+    const store = memory();
     const httpError = scripted({ at: 3, result: { kind: "response", status: 503, bytes: encoder.encode("nope") } });
     const failed = await runProbe({
       config,
       session: account,
       http: httpError.http,
       token: tokens({ ok: true, token: tokenText }, []),
-      storage: memory(),
+      storage: store,
       lock: { held: false },
     });
-    expect(failed).toMatchObject({ phase: "http-error", httpStatus: 503 });
+    expect(failed).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown", httpStatus: 503 });
+    expect(store.current()).toMatchObject({ rootId: "root-1", pendingMutation: true });
     expect(httpError.calls.some((call) => call.url.includes("meta.json") || new TextDecoder().decode(call.body ?? new Uint8Array()).includes("meta.json"))).toBe(false);
+    const later = scripted();
+    const restored = await connectDrive({
+      config,
+      interactive: false,
+      http: later.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+    });
+    expect(restored).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown" });
+    expect(later.calls.some((call) => call.method === "POST")).toBe(false);
 
     const invalid = scripted({ at: 1, result: { kind: "response", status: 200, bytes: encoder.encode("{") } });
     const bad = await connectDrive({
@@ -296,18 +312,21 @@ describe("drive probe", () => {
 
   it("drops a cached token on 401 and does not replay the mutation", async () => {
     const removed: string[] = [];
+    const store = memory();
     const drive = scripted({ at: 3, result: { kind: "response", status: 401, bytes: encoder.encode("{}") } });
     const expired = await runProbe({
       config,
       session: account,
       http: drive.http,
       token: tokens({ ok: true, token: tokenText }, removed),
-      storage: memory(),
+      storage: store,
       lock: { held: false },
     });
     expect(expired.phase).toBe("auth-expired");
+    expect(expired.warning).toBeNull();
     expect(removed).toEqual([tokenText]);
     expect(drive.calls).toHaveLength(3);
+    expect(store.current()).toMatchObject({ rootId: "root-1", pendingMutation: false });
     expect(panelCopy(expired).status).toContain("not retried");
     noToken(expired);
   });
@@ -328,6 +347,18 @@ describe("drive probe", () => {
     expect(store.current()).toMatchObject({ rootId: "root-old", pendingMutation: true });
     expect(lost.calls).toHaveLength(2);
 
+    const blocked = scripted();
+    const held = await runProbe({
+      config,
+      session: account,
+      http: blocked.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+      lock: { held: false },
+    });
+    expect(held.phase).toBe("unknown-mutation");
+    expect(blocked.calls).toHaveLength(0);
+
     const again = scripted();
     const retried = await runProbe({
       config,
@@ -336,6 +367,7 @@ describe("drive probe", () => {
       token: tokens({ ok: true, token: tokenText }, []),
       storage: store,
       lock: { held: false },
+      ackPendingId: stopped.pendingId,
     });
     expect(retried).toMatchObject({ phase: "verified", warning: "previous-unknown" });
     expect(again.calls.some((call) => call.url.includes("old-file") || call.url.includes("root-old"))).toBe(false);
@@ -352,6 +384,230 @@ describe("drive probe", () => {
     });
     expect(switched.phase).toBe("account-changed");
     expect(otherAccount.calls.some((call) => call.method === "POST")).toBe(false);
+  });
+
+  it("keeps a mutating 5xx unresolved after the folder was applied", async () => {
+    for (const status of [503, 504]) {
+      const store = memory({ accountId: "perm-1", rootId: "root-old", files: [{ name: "note.md", id: "old-file" }], pendingMutation: false });
+      const drive = scripted({ at: 2, result: { kind: "response", status, bytes: encoder.encode("{}") } });
+      const failed = await runProbe({
+        config,
+        session: account,
+        http: drive.http,
+        token: tokens({ ok: true, token: tokenText }, []),
+        storage: store,
+        lock: { held: false },
+      });
+      expect(failed).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown", httpStatus: status });
+      expect(panelCopy(failed).status).toContain(`HTTP ${status}`);
+      expect(store.current()).toEqual({
+        accountId: "perm-1",
+        rootId: "root-old",
+        files: [{ name: "note.md", id: "old-file" }],
+        pendingMutation: true,
+      });
+      expect(drive.calls).toHaveLength(2);
+      const later = scripted();
+      const restored = await connectDrive({
+        config,
+        interactive: false,
+        http: later.http,
+        token: tokens({ ok: true, token: tokenText }, []),
+        storage: store,
+      });
+      expect(restored.phase).toBe("unknown-mutation");
+      expect(restored.warning).toBe("previous-unknown");
+      expect(later.calls.some((call) => call.method === "POST")).toBe(false);
+    }
+  });
+
+  it("does not mark a GET failure as an unresolved mutation", async () => {
+    const store = memory({ accountId: "perm-1", rootId: "root-1", files: [{ name: "note.md", id: "file-md" }], pendingMutation: false });
+    const drive = scripted({ at: 2, result: { kind: "response", status: 503, bytes: encoder.encode("{}") } });
+    const failed = await connectDrive({
+      config,
+      interactive: false,
+      http: drive.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+    });
+    expect(failed).toMatchObject({ phase: "http-error", httpStatus: 503, warning: null, pendingId: null });
+    expect(store.current()?.pendingMutation).toBe(false);
+    expect(drive.calls.every((call) => call.method === "GET")).toBe(true);
+  });
+
+  it("keeps the older unresolved root when a new attempt is rejected", async () => {
+    for (const status of [403, 401]) {
+      const prior: ProbeRecord = { accountId: "perm-1", rootId: "root-old", files: [{ name: "note.md", id: "old-file" }], pendingMutation: false };
+      const store = memory(prior);
+      const lost = scripted({ at: 2, result: { kind: "unknown" } });
+      const stopped = await runProbe({
+        config,
+        session: account,
+        http: lost.http,
+        token: tokens({ ok: true, token: tokenText }, []),
+        storage: store,
+        lock: { held: false },
+      });
+      const key = unresolvedKey(store.current());
+      expect(stopped.pendingId).toBe(key);
+      expect(store.current()).toMatchObject({ rootId: "root-old", pendingMutation: true });
+
+      const removed: string[] = [];
+      const rejected = scripted({ at: 2, result: { kind: "response", status, bytes: encoder.encode("{}") } });
+      const failed = await runProbe({
+        config,
+        session: account,
+        http: rejected.http,
+        token: tokens({ ok: true, token: tokenText }, removed),
+        storage: store,
+        lock: { held: false },
+        ackPendingId: key,
+      });
+      expect(failed.warning).toBe("previous-unknown");
+      expect(failed.phase).toBe(status === 401 ? "auth-expired" : "http-error");
+      expect(store.current()).toEqual({ accountId: "perm-1", rootId: "root-old", files: [{ name: "note.md", id: "old-file" }], pendingMutation: true });
+      expect(rejected.calls.filter((call) => call.method === "POST")).toHaveLength(1);
+      expect(removed).toEqual(status === 401 ? [tokenText] : []);
+
+      const later = scripted();
+      const restored = await connectDrive({
+        config,
+        interactive: false,
+        http: later.http,
+        token: tokens({ ok: true, token: tokenText }, []),
+        storage: store,
+      });
+      expect(restored).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown", pendingId: key });
+      expect(restored.phase).not.toBe("connected");
+      expect(later.calls.some((call) => call.method === "POST")).toBe(false);
+      expect(store.current()?.pendingMutation).toBe(true);
+    }
+  });
+
+  it("warns a stale panel before the new folder request", async () => {
+    const prior: ProbeRecord = { accountId: "perm-1", rootId: "root-old", files: [{ name: "note.md", id: "old-file" }], pendingMutation: true };
+    const key = unresolvedKey(prior);
+    let panel = planPanel(initialPanelView, { phase: "connected", account, warning: null, httpStatus: null, pendingId: null });
+    expect(panel.notice).toBe("");
+    expect(panel.seenPendingId).toBeNull();
+
+    const store = memory(prior);
+    const early = scripted();
+    const request = panelRequest("probe", panel.seenPendingId);
+    const stopped = await runProbe({
+      config,
+      session: account,
+      http: early.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+      lock: { held: false },
+      ackPendingId: request.ackPendingId ?? null,
+    });
+    expect(early.calls).toHaveLength(0);
+    expect(stopped).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown", pendingId: key });
+    panel = planPanel(panel, stopped);
+    expect(panel.notice).toContain("may have succeeded");
+    expect(panel.seenPendingId).toBe(key);
+    expect(store.current()).toEqual(prior);
+
+    const stale = scripted();
+    const ignored = await runProbe({
+      config,
+      session: account,
+      http: stale.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+      lock: { held: false },
+      ackPendingId: "other-panel",
+    });
+    expect(stale.calls).toHaveLength(0);
+    expect(ignored.pendingId).toBe(key);
+
+    const refresh = scripted();
+    const restored = await connectDrive({
+      config,
+      interactive: false,
+      http: refresh.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+    });
+    expect(panelRequest("restore", key)).toEqual({ protocol: DRIVE_PROTOCOL, type: "restore" });
+    expect(refresh.calls.some((call) => call.method === "POST")).toBe(false);
+    expect(restored.phase).toBe("unknown-mutation");
+
+    const started = scripted();
+    const acked = panelRequest("probe", panel.seenPendingId);
+    expect(acked.ackPendingId).toBe(key);
+    const created = await runProbe({
+      config,
+      session: account,
+      http: started.http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+      lock: { held: false },
+      ackPendingId: acked.ackPendingId ?? null,
+    });
+    expect(created.phase).toBe("verified");
+    expect(started.calls.some((call) => call.method === "POST")).toBe(true);
+    expect(panelCopy(created).notice).toContain("new folder");
+  });
+
+  it("clears a reopened Busy panel after the probe finishes", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const drive = scripted();
+    const http: HttpClient = async (request) => {
+      await gate;
+      return drive.http(request);
+    };
+    const lock = { held: false };
+    const store = memory();
+    const deps = {
+      config,
+      session: account,
+      http,
+      token: tokens({ ok: true, token: tokenText }, []),
+      storage: store,
+      lock,
+    };
+    const running = dispatchDrive({ ...deps, message: { protocol: DRIVE_PROTOCOL, type: "probe" } });
+    const reopened = await dispatchDrive({ ...deps, message: { protocol: DRIVE_PROTOCOL, type: "restore" } });
+    expect(reopened.phase).toBe("busy");
+    let panel = planPanel(initialPanelView, reopened);
+    expect(panel.connectDisabled).toBe(true);
+    expect(panel.probeDisabled).toBe(true);
+    expect(panel.refresh).toBe(true);
+    let steps = 1;
+    while (panel.refresh) {
+      panel = planPanel(panel, reopened);
+      steps += 1;
+      expect(steps).toBeLessThanOrEqual(MAX_BUSY_POLLS + 1);
+    }
+    expect(steps).toBe(MAX_BUSY_POLLS + 1);
+    expect(panelRequest("restore", panel.seenPendingId).type).toBe("restore");
+
+    release();
+    const done = await running;
+    expect(done.phase).toBe("verified");
+    panel = planPanel(panel, done);
+    expect(panel.refresh).toBe(false);
+    expect(panel.probeDisabled).toBe(false);
+    expect(panel.connectDisabled).toBe(false);
+
+    const after = scripted();
+    const settled = await dispatchDrive({
+      ...deps,
+      http: after.http,
+      message: { protocol: DRIVE_PROTOCOL, type: "restore" },
+    });
+    expect(settled.phase).toBe("connected");
+    expect(after.calls.some((call) => call.method === "POST")).toBe(false);
+    panel = planPanel(panel, settled);
+    expect(panel.refresh).toBe(false);
+    expect(panel.probeDisabled).toBe(false);
   });
 
   it("keeps stored probe ids and drops any token field", () => {

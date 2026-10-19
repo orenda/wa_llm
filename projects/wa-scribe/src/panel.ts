@@ -1,4 +1,5 @@
-import { DRIVE_PROTOCOL, panelCopy, type DriveResult } from "./drive";
+import { isDriveResult, isDriveStatus, type DriveResult } from "./drive";
+import { initialPanelView, panelRequest, planPanel, type PanelView } from "./panel-state";
 import { contentHello, invalidRequest, panelPing } from "./protocol";
 import { reportExchange } from "./report";
 
@@ -12,38 +13,54 @@ const noticeNode = document.querySelector("#notice");
 const connectButton = document.querySelector("#connect");
 const probeButton = document.querySelector("#probe-run");
 
-function show(result: DriveResult): void {
-  const copy = panelCopy(result);
-  if (statusNode) statusNode.textContent = copy.status;
-  if (accountNode) accountNode.textContent = copy.account;
-  if (noticeNode) noticeNode.textContent = copy.notice;
-  const blocked = result.phase === "missing-setup" || result.phase === "busy";
-  if (connectButton instanceof HTMLButtonElement) connectButton.disabled = blocked;
-  const canProbe = result.account !== null && result.phase !== "busy" && result.phase !== "auth-expired" && result.phase !== "missing-setup";
-  if (probeButton instanceof HTMLButtonElement) probeButton.disabled = !canProbe;
+let view: PanelView = initialPanelView;
+let epoch = 0;
+
+function render(): void {
+  if (statusNode) statusNode.textContent = view.status;
+  if (accountNode) accountNode.textContent = view.account;
+  if (noticeNode) noticeNode.textContent = view.notice;
+  if (connectButton instanceof HTMLButtonElement) connectButton.disabled = view.connectDisabled;
+  if (probeButton instanceof HTMLButtonElement) probeButton.disabled = view.probeDisabled;
 }
 
-function send(type: "restore" | "connect" | "probe"): void {
-  chrome.runtime.sendMessage({ protocol: DRIVE_PROTOCOL, type }, (reply: unknown) => {
+function apply(result: DriveResult): void {
+  epoch += 1;
+  const scheduled = epoch;
+  view = planPanel(view, result);
+  render();
+  if (!view.refresh) return;
+  setTimeout(() => {
+    if (epoch !== scheduled) return;
+    post("restore");
+  }, 300);
+}
+
+function post(type: "connect" | "restore" | "probe"): void {
+  const sent = epoch;
+  chrome.runtime.sendMessage(panelRequest(type, view.seenPendingId), (reply: unknown) => {
+    if (epoch !== sent) return;
     if (chrome.runtime.lastError || !isDriveResult(reply)) {
       if (statusNode) statusNode.textContent = "The extension worker did not answer.";
       if (connectButton instanceof HTMLButtonElement) connectButton.disabled = false;
       return;
     }
-    show(reply);
+    apply(reply);
   });
 }
 
 function arm(type: "connect" | "probe"): void {
   if (connectButton instanceof HTMLButtonElement) connectButton.disabled = true;
   if (probeButton instanceof HTMLButtonElement) probeButton.disabled = true;
-  send(type);
+  post(type);
 }
 
-function isDriveResult(value: unknown): value is DriveResult {
-  return typeof value === "object" && value !== null && "phase" in value && "account" in value && "warning" in value && "httpStatus" in value;
-}
+chrome.runtime.onMessage.addListener((message: unknown) => {
+  if (!isDriveStatus(message)) return undefined;
+  apply(message.result);
+  return undefined;
+});
 
 if (connectButton instanceof HTMLButtonElement) connectButton.addEventListener("click", () => arm("connect"));
 if (probeButton instanceof HTMLButtonElement) probeButton.addEventListener("click", () => arm("probe"));
-send("restore");
+post("restore");

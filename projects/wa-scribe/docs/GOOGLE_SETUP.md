@@ -61,7 +61,9 @@ The built `dist/manifest.json` contains the client id, the public key, and the s
 4. Click **Run Drive test** once. Connect itself does not create files. The probe creates a new folder named `wa-scribe test`, then writes and reads `note.md`, `meta.json`, and `dot.bin` inside it. The panel should say the raw bytes were verified.
 5. Close Chrome and open it again. Open the panel. The cached connection may show the same account without a new consent screen. It must not create another folder until you click **Run Drive test** again.
 
-If a change may have succeeded but the response was lost, the panel says so and stops. The next **Run Drive test** creates another folder. It does not retry or delete the earlier one.
+If a change may have succeeded but the response was lost, or Drive returns HTTP 500, 502, 503, or 504 for a write, the panel says the outcome is unknown and stops. It keeps that warning. It does not retry the request and it does not delete anything. **Run Drive test** shows the warning before it creates another folder. Click it again only after that warning is visible. The second click starts a new folder and leaves the earlier change alone. A rejected sign-in or permission error does not clear an older unresolved change.
+
+Closing the panel during a test and opening it again can show that a test is already running. The panel catches up when that test finishes. Reopening does not start another test or another consent screen.
 
 ## 6. Check the downloaded tree
 

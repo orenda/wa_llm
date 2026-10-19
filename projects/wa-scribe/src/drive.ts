@@ -57,6 +57,7 @@ export type DriveResult = {
   account: DriveAccount | null;
   warning: DriveWarning;
   httpStatus: number | null;
+  pendingId: string | null;
 };
 
 export type HttpRequest = {
@@ -87,18 +88,48 @@ export type ProbeStorage = {
 
 export type ProbeLock = { held: boolean };
 
-export type DriveRequest = { protocol: typeof DRIVE_PROTOCOL; type: "connect" | "restore" | "probe" };
+export type DriveRequest = {
+  protocol: typeof DRIVE_PROTOCOL;
+  type: "connect" | "restore" | "probe";
+  ackPendingId?: string;
+};
+
+export type DriveStatus = { protocol: typeof DRIVE_PROTOCOL; type: "drive-status"; result: DriveResult };
 
 type Created = { id: string; name: string; mimeType: string; parents: string[] };
 
-const empty: DriveResult = { phase: "signed-out", account: null, warning: null, httpStatus: null };
+const empty: DriveResult = { phase: "signed-out", account: null, warning: null, httpStatus: null, pendingId: null };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function isDriveResult(value: unknown): value is DriveResult {
+  return (
+    isRecord(value) &&
+    typeof value.phase === "string" &&
+    "account" in value &&
+    "warning" in value &&
+    "httpStatus" in value &&
+    (value.pendingId === null || typeof value.pendingId === "string")
+  );
+}
+
 export function isDriveRequest(value: unknown): value is DriveRequest {
-  return isRecord(value) && value.protocol === DRIVE_PROTOCOL && (value.type === "connect" || value.type === "restore" || value.type === "probe");
+  if (!isRecord(value) || value.protocol !== DRIVE_PROTOCOL) return false;
+  if (value.type !== "connect" && value.type !== "restore" && value.type !== "probe") return false;
+  return value.ackPendingId === undefined || typeof value.ackPendingId === "string";
+}
+
+export function isDriveStatus(value: unknown): value is DriveStatus {
+  return isRecord(value) && value.protocol === DRIVE_PROTOCOL && value.type === "drive-status" && isDriveResult(value.result);
+}
+
+/** Stable id for the current unresolved ids. An ack from another panel or an older state does not match. */
+export function unresolvedKey(record: ProbeRecord | null): string | null {
+  if (!record?.pendingMutation) return null;
+  const files = record.files.map((file) => `${file.name}:${file.id}`).join(",");
+  return `${record.accountId}:${record.rootId ?? ""}:${files}`;
 }
 
 export function classifyIdentityError(message: string, interactive: boolean): TokenFailure {
@@ -113,7 +144,11 @@ export function classifyIdentityError(message: string, interactive: boolean): To
 export function panelCopy(result: DriveResult): { status: string; account: string; notice: string } {
   const notice =
     result.warning === "previous-unknown"
-      ? "A previous Drive change may have succeeded. It was not retried. A new test uses a new folder."
+      ? result.phase === "verified"
+        ? "This test used a new folder. The earlier unresolved change was not retried."
+        : result.phase === "auth-expired"
+          ? "A previous Drive change may have succeeded. It was not retried. Connect again before a new test."
+          : "A previous Drive change may have succeeded. It was not retried. Run Drive test again to start a new folder."
       : result.warning === "account-changed"
         ? "The Drive account changed. The previous test folder is paused."
         : result.warning === "root-missing"
@@ -127,7 +162,10 @@ export function panelCopy(result: DriveResult): { status: string; account: strin
     connected: "Connected.",
     "account-changed": "Connected. The previous test folder is paused.",
     "root-missing": "Connected. The saved test folder is missing.",
-    "unknown-mutation": "A Drive change may have succeeded. This attempt stopped.",
+    "unknown-mutation":
+      result.httpStatus === null
+        ? "A Drive change may have succeeded. This attempt stopped."
+        : `Drive returned HTTP ${result.httpStatus}. A Drive change may have succeeded. This attempt stopped.`,
     "auth-expired": "Drive access expired or was revoked. Connect again. The test was not retried.",
     "http-error": result.httpStatus === null ? "Drive returned an HTTP error." : `Drive returned HTTP ${result.httpStatus}.`,
     "invalid-json": "Drive returned invalid JSON.",
@@ -145,8 +183,14 @@ function mergeWarning(current: DriveWarning, incoming: DriveWarning): DriveWarni
   return current ?? incoming;
 }
 
-function result(phase: DrivePhase, account: DriveAccount | null, warning: DriveWarning = null, httpStatus: number | null = null): DriveResult {
-  return { phase, account, warning, httpStatus };
+function result(
+  phase: DrivePhase,
+  account: DriveAccount | null,
+  warning: DriveWarning = null,
+  httpStatus: number | null = null,
+  pendingId: string | null = null,
+): DriveResult {
+  return { phase, account, warning, httpStatus, pendingId };
 }
 
 function parseJson(bytes: Uint8Array): unknown | null {
@@ -196,23 +240,40 @@ function multipart(meta: { name: string; mimeType: string; parents: string[] }, 
 
 type Call = { count: number; token: string; http: HttpClient; storage: ProbeStorage; remove: (token: string) => Promise<void> };
 
-async function exchange(call: Call, request: Omit<HttpRequest, "token">, record: ProbeRecord | null): Promise<{ bytes: Uint8Array } | DriveResult> {
+async function exchange(
+  call: Call,
+  request: Omit<HttpRequest, "token">,
+  record: ProbeRecord | null,
+  inheritedPending: boolean,
+): Promise<{ bytes: Uint8Array } | DriveResult> {
   if (call.count >= MAX_REQUESTS) return result("budget", null);
   call.count += 1;
   const mutating = request.method !== "GET";
-  if (mutating && record) await call.storage.set({ ...record, pendingMutation: true });
+  const marked = record ? { ...record, pendingMutation: true } : null;
+  if (mutating && marked) await call.storage.set(marked);
   const response = await call.http({ ...request, token: call.token });
-  if (response.kind === "unknown") return result("unknown-mutation", null, "previous-unknown");
+  const pendingId = unresolvedKey(marked);
+  if (response.kind === "unknown") return result("unknown-mutation", null, "previous-unknown", null, pendingId);
   if (response.status === 401) {
     await call.remove(call.token);
-    if (mutating && record) await call.storage.set({ ...record, pendingMutation: false });
-    return result("auth-expired", null);
+    const kept = await restoreInherited(call, record, mutating, inheritedPending);
+    return result("auth-expired", null, kept ? "previous-unknown" : null, null, kept);
+  }
+  if (mutating && response.status >= 500 && response.status <= 599) {
+    return result("unknown-mutation", null, "previous-unknown", response.status, pendingId);
   }
   if (response.status < 200 || response.status >= 300) {
-    if (mutating && record) await call.storage.set({ ...record, pendingMutation: false });
-    return result("http-error", null, null, response.status);
+    const kept = await restoreInherited(call, record, mutating, inheritedPending);
+    return result("http-error", null, kept ? "previous-unknown" : null, response.status, kept);
   }
   return { bytes: response.bytes };
+}
+
+async function restoreInherited(call: Call, record: ProbeRecord | null, mutating: boolean, inheritedPending: boolean): Promise<string | null> {
+  if (!mutating || !record) return null;
+  const next = { ...record, pendingMutation: inheritedPending };
+  await call.storage.set(next);
+  return inheritedPending ? unresolvedKey(next) : null;
 }
 
 async function authorize(config: PublicOAuth, interactive: boolean, token: TokenClient, http: HttpClient, storage: ProbeStorage): Promise<{ account: DriveAccount; call: Call } | DriveResult> {
@@ -220,7 +281,7 @@ async function authorize(config: PublicOAuth, interactive: boolean, token: Token
   const issued = await token.get(interactive);
   if (!issued.ok) return result(issued.reason === "expired" ? "auth-expired" : issued.reason, null);
   const call: Call = { count: 0, token: issued.token, http, storage, remove: (value) => token.remove(value) };
-  const about = await exchange(call, { method: "GET", url: ABOUT_URL }, null);
+  const about = await exchange(call, { method: "GET", url: ABOUT_URL }, null, false);
   if ("phase" in about) return about;
   const account = readAccount(about.bytes);
   if (!account) return result("invalid-json", null);
@@ -237,10 +298,10 @@ export async function connectDrive(input: {
   const auth = await authorize(input.config, input.interactive, input.token, input.http, input.storage);
   if ("phase" in auth) return auth;
   const stored = await input.storage.get();
-  if (stored?.pendingMutation) return result("unknown-mutation", auth.account, "previous-unknown");
+  if (stored?.pendingMutation) return result("unknown-mutation", auth.account, "previous-unknown", null, unresolvedKey(stored));
   if (stored && stored.accountId !== auth.account.permissionId) return result("account-changed", auth.account, "account-changed");
   if (stored?.rootId) {
-    const folder = await exchange(auth.call, { method: "GET", url: `${FILES_URL}/${stored.rootId}?fields=id,trashed,mimeType` }, null);
+    const folder = await exchange(auth.call, { method: "GET", url: `${FILES_URL}/${stored.rootId}?fields=id,trashed,mimeType` }, null, false);
     if ("phase" in folder && folder.phase === "http-error" && folder.httpStatus === 404) return result("root-missing", auth.account, "root-missing");
     if ("phase" in folder) return { ...folder, account: auth.account };
     const parsed = parseJson(folder.bytes);
@@ -263,15 +324,16 @@ async function createFile(call: Call, record: ProbeRecord, file: (typeof PROBE_F
     call,
     { method: "POST", url: `${UPLOAD_URL}?uploadType=multipart&fields=id,name,mimeType,parents`, contentType: payload.contentType, body: payload.body },
     record,
+    record.pendingMutation,
   );
   if ("phase" in created) return created;
   const meta = readCreated(created.bytes);
-  if (!meta) return result("unknown-mutation", null, "previous-unknown");
+  if (!meta) return result("unknown-mutation", null, "previous-unknown", null, unresolvedKey({ ...record, pendingMutation: true }));
   record.files.push({ name: file.name, id: meta.id });
   await call.storage.set({ ...record, pendingMutation: false });
   if (meta.name !== file.name || meta.mimeType !== file.mimeType || meta.mimeType.startsWith("application/vnd.google-apps.") || !meta.parents.includes(record.rootId))
     return result("mismatch", null);
-  const downloaded = await exchange(call, { method: "GET", url: `${FILES_URL}/${meta.id}?alt=media` }, null);
+  const downloaded = await exchange(call, { method: "GET", url: `${FILES_URL}/${meta.id}?alt=media` }, null, false);
   if ("phase" in downloaded) return downloaded;
   if (!sameBytes(downloaded.bytes, file.bytes)) return result("mismatch", null);
   return null;
@@ -284,22 +346,31 @@ export async function runProbe(input: {
   token: TokenClient;
   storage: ProbeStorage;
   lock: ProbeLock;
+  ackPendingId?: string | null;
 }): Promise<DriveResult> {
   if (input.lock.held) return result("busy", input.session);
   if (!input.session) return result("signed-out", null);
   input.lock.held = true;
   try {
     const prior = await input.storage.get();
+    const pendingId = unresolvedKey(prior);
+    if (pendingId && input.ackPendingId !== pendingId) return result("unknown-mutation", input.session, "previous-unknown", null, pendingId);
     const warning: DriveWarning = prior?.pendingMutation ? "previous-unknown" : prior && prior.accountId !== input.session.permissionId ? "account-changed" : null;
     const auth = await authorize(input.config, false, input.token, input.http, input.storage);
     if ("phase" in auth) return auth;
     if (auth.account.permissionId !== input.session.permissionId) return result("account-changed", auth.account, "account-changed");
-    const staged: ProbeRecord = prior ?? { accountId: auth.account.permissionId, rootId: null, files: [], pendingMutation: true };
+    const inheritedPending = Boolean(prior?.pendingMutation);
+    const staged: ProbeRecord = prior ?? { accountId: auth.account.permissionId, rootId: null, files: [], pendingMutation: false };
     const folderBody = textEncoder.encode(JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME, description: "wa-scribe synthetic probe. Not a chat export." }));
-    const folder = await exchange(auth.call, { method: "POST", url: `${FILES_URL}?fields=id,name,mimeType`, contentType: "application/json", body: folderBody }, staged);
+    const folder = await exchange(
+      auth.call,
+      { method: "POST", url: `${FILES_URL}?fields=id,name,mimeType`, contentType: "application/json", body: folderBody },
+      staged,
+      inheritedPending,
+    );
     if ("phase" in folder) return { ...folder, account: auth.account, warning: mergeWarning(warning, folder.warning) };
     const created = readCreated(folder.bytes);
-    if (!created) return result("unknown-mutation", auth.account, "previous-unknown");
+    if (!created) return result("unknown-mutation", auth.account, "previous-unknown", null, unresolvedKey({ ...staged, pendingMutation: true }));
     let record: ProbeRecord = { accountId: auth.account.permissionId, rootId: created.id, files: [], pendingMutation: false };
     await input.storage.set(record);
     if (created.name !== FOLDER_NAME || created.mimeType !== FOLDER_MIME) return result("mismatch", auth.account, warning);
@@ -314,18 +385,49 @@ export async function runProbe(input: {
       auth.call,
       { method: "PATCH", url: `${UPLOAD_URL}/${markdown.id}?uploadType=media&fields=id,name,mimeType`, contentType: "text/markdown", body: updated },
       record,
+      record.pendingMutation,
     );
     if ("phase" in patched) return { ...patched, account: auth.account, warning: mergeWarning(warning, patched.warning) };
     const patchMeta = readCreated(patched.bytes);
-    if (!patchMeta) return result("unknown-mutation", auth.account, "previous-unknown");
+    if (!patchMeta) return result("unknown-mutation", auth.account, "previous-unknown", null, unresolvedKey({ ...record, pendingMutation: true }));
     await input.storage.set({ ...record, pendingMutation: false });
     if (patchMeta.id !== markdown.id || patchMeta.mimeType !== "text/markdown" || patchMeta.mimeType.startsWith("application/vnd.google-apps."))
       return result("mismatch", auth.account, warning);
-    const reread = await exchange(auth.call, { method: "GET", url: `${FILES_URL}/${markdown.id}?alt=media` }, null);
+    const reread = await exchange(auth.call, { method: "GET", url: `${FILES_URL}/${markdown.id}?alt=media` }, null, false);
     if ("phase" in reread) return { ...reread, account: auth.account, warning: mergeWarning(warning, reread.warning) };
     if (!sameBytes(reread.bytes, updated)) return result("mismatch", auth.account, warning);
     return result("verified", auth.account, warning);
   } finally {
     input.lock.held = false;
   }
+}
+
+export async function dispatchDrive(input: {
+  message: DriveRequest;
+  session: DriveAccount | null;
+  lock: ProbeLock;
+  config: PublicOAuth;
+  http: HttpClient;
+  token: TokenClient;
+  storage: ProbeStorage;
+}): Promise<DriveResult> {
+  if (input.message.type !== "probe" && input.lock.held) return result("busy", input.session);
+  if (input.message.type === "probe") {
+    return runProbe({
+      config: input.config,
+      session: input.session,
+      http: input.http,
+      token: input.token,
+      storage: input.storage,
+      lock: input.lock,
+      ackPendingId: input.message.ackPendingId ?? null,
+    });
+  }
+  return connectDrive({
+    config: input.config,
+    interactive: input.message.type === "connect",
+    http: input.http,
+    token: input.token,
+    storage: input.storage,
+  });
 }

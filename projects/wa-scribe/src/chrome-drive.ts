@@ -1,7 +1,8 @@
 import { bakedOAuth } from "./public-config";
 import {
-  connectDrive,
-  runProbe,
+  DRIVE_PROTOCOL,
+  dispatchDrive,
+  unresolvedKey,
   type DriveAccount,
   type DriveRequest,
   type DriveResult,
@@ -105,18 +106,24 @@ function remember(result: DriveResult): DriveResult {
   return result;
 }
 
+function notify(result: DriveResult): void {
+  chrome.runtime.sendMessage({ protocol: DRIVE_PROTOCOL, type: "drive-status", result }, () => {
+    void chrome.runtime.lastError;
+  });
+}
+
 export async function handleDrive(message: DriveRequest): Promise<DriveResult> {
   const config = bakedOAuth();
   const deps = { config, http: chromeHttp, token: { get: identityToken, remove: removeToken }, storage: storage() };
   try {
-    if (message.type === "probe") {
-      return remember(await runProbe({ ...deps, session, lock }));
-    }
-    if (lock.held) return { phase: "busy", account: session, warning: null, httpStatus: null };
-    return remember(await connectDrive({ ...deps, interactive: message.type === "connect" }));
+    const outcome = remember(await dispatchDrive({ ...deps, message, session, lock }));
+    if (message.type === "probe" && outcome.phase !== "busy") notify(outcome);
+    return outcome;
   } catch {
     const stored = await storage().get();
-    if (stored?.pendingMutation) return { phase: "unknown-mutation", account: session, warning: "previous-unknown", httpStatus: null };
-    return { phase: "http-error", account: session, warning: null, httpStatus: null };
+    if (stored?.pendingMutation) {
+      return { phase: "unknown-mutation", account: session, warning: "previous-unknown", httpStatus: null, pendingId: unresolvedKey(stored) };
+    }
+    return { phase: "http-error", account: session, warning: null, httpStatus: null, pendingId: null };
   }
 }
