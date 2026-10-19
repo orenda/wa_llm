@@ -25,12 +25,19 @@
         white-space: pre-wrap;
         font: 12px/1.4 ui-monospace, monospace;
       }
+      button {
+        margin: 0 8px 8px 0;
+      }
     </style>
   </head>
   <body>
     <main>
       <h1>wa-scribe</h1>
-      <p id="status">Setup is not implemented.</p>
+      <p id="status">Checking Google Drive setup.</p>
+      <p id="account"></p>
+      <p id="notice"></p>
+      <button id="connect" type="button" disabled>Connect Google Drive</button>
+      <button id="probe-run" type="button" disabled>Run Drive test</button>
       <pre id="panel-pong"></pre>
       <pre id="panel-wrong-context"></pre>
       <pre id="panel-invalid"></pre>

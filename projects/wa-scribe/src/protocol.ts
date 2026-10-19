@@ -57,6 +57,10 @@ function isPanelUrl(url: string, ownExtensionId: string): boolean {
   return url === panel || url.startsWith(`${panel}?`);
 }
 
+export function isPanelSender(sender: SenderContext, ownExtensionId: string): boolean {
+  return sender.extensionId === ownExtensionId && isPanelUrl(sender.url, ownExtensionId);
+}
+
 function isWebPage(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
 }

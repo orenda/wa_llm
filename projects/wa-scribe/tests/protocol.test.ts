@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROTOCOL, contentHello, decide, invalidRequest, panelPing } from "../src/protocol";
+import { PROTOCOL, contentHello, decide, invalidRequest, isPanelSender, panelPing } from "../src/protocol";
 
 const own = "extension-id";
 const panelSender = { extensionId: own, url: `chrome-extension://${own}/panel.html` };
@@ -19,6 +19,9 @@ describe("decide", () => {
       requestId: "content-as-panel",
       reason: "unexpected-sender",
     });
+    expect(isPanelSender(panelSender, own)).toBe(true);
+    expect(isPanelSender({ ...panelSender, url: `${panelSender.url}?view=1` }, own)).toBe(true);
+    expect(isPanelSender(contentSender, own)).toBe(false);
   });
 
   it("accepts a fixture hello only from a content-script tab", () => {
