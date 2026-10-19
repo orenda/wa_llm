@@ -83,6 +83,9 @@ test("production extension loads without fixture access", async () => {
     );
     await expect(panel.locator("#connect")).toBeDisabled();
     await expect(panel.locator("#probe-run")).toBeDisabled();
+    await expect(panel.locator("#edit-pass")).toBeDisabled();
+    await expect(panel.locator("#delete-export")).toBeDisabled();
+    await expect(panel.locator("#mode-warning")).toContainText("Finish editing");
     expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
     expect(await readJson(panel, "#panel-pong")).toEqual({
       protocol: PROTOCOL,
