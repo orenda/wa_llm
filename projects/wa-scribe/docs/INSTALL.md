@@ -1,12 +1,14 @@
 # Install wa-scribe in Chrome
 
-This is an installable **0.1.0 alpha**, not a verified v1 release. The build and TypeScript checks were run. Automated tests, Chrome interaction tests, live WhatsApp, Google consent, and real Drive operations were deliberately **not run**, at the owner's request.
+This is an installable **0.1.1 alpha**, not a verified v1 release. The build and TypeScript checks were run. Automated tests, Chrome interaction tests, live WhatsApp, Google consent, and real Drive operations were deliberately **not run**, at the owner's request.
 
 ## Install the ZIP
 
 1. [Download wa-scribe.zip](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/install/wa-scribe.zip?raw=true) and extract it into a permanent folder. Keep this folder: Chrome loads the unpacked files from it.
 2. Open `chrome://extensions`, turn on **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
 3. Open or reload [WhatsApp Web](https://web.whatsapp.com/), then click the wa-scribe extension icon to open its side panel. Chrome 116 or newer is required.
+
+To update 0.1.0, replace the files in the same unpacked folder, retain your configured `oauth2` block in `manifest.json`, and click **Reload**. Keep the existing public `key`; do not remove/reinstall the extension or clear its storage. Confirm version 0.1.1, then reload WhatsApp Web. This preserves pending operations and registered chats.
 
 The included public key gives the unpacked extension this stable ID:
 
@@ -45,10 +47,11 @@ You can register several chats. A pass freezes the selected set; each selected c
 ## Edit, Stop, recovery and deletion
 
 - **Download** keeps stored wording when a source message changes. **Edit** applies positively observed changes and delete-for-everyone markers only when the generated blocks remain locally unchanged. An absent row is not a deletion. Partial local edits pause the chat; whole-block removal is retained as a tombstone when alignment is unambiguous. Notes are preserved.
+- `sync.json` retains the collector's stop reason, such as `visible-window`, `message-budget`, `byte-budget` or `time-budget`. The panel derives Partial from that same coverage record; an identical resync says Unchanged while retaining partial coverage. Verified message order never means a complete archive. A local-edit pause identifies the affected message IDs.
 - **Stop** or unselecting the active chat stops collection/new mutations at a safe boundary. An already sent Drive mutation may still complete. Opening the panel or restarting Chrome never resumes collection automatically.
 - Each commit writes **new, preallocated Drive IDs**. A late create cannot overwrite newer generation files. Known IDs, exact staged content and ownership are retained before writes. **Recover** is explicit and can retry the same immutable create ID, verify a 409 against ownership/digest/read-back bytes, and publish only a coherent transcript/sidecar. This uses Drive's pre-generated-ID semantics; it is not an atomic folder transaction or a cross-device lock.
-- If a transcript/sidecar changes after capture, recovery pauses without replacing it. **Start fresh** explicitly creates a separate export generation on the next sync, leaves the previous tree untouched, and does not inherit missing tombstones. Do not clear Chrome extension storage as a recovery method.
-- **Delete export** requires confirmation and the displayed bound Google account. It trashes only recorded owned files. Folders are retained, even if empty: `drive.file` may hide foreign children, so an empty listing cannot justify trashing their parent. Interrupted cleanup retains state for retry. Drive trash/history and prior explicitly archived export trees are not erased.
+- If a transcript/sidecar changes after capture, recovery pauses without replacing it. **Start fresh** refuses while a save, deletion or previous-generation cleanup is unresolved. Once resolved, it explicitly creates a separate export generation on the next sync, leaves the previous tree untouched, and does not inherit missing tombstones. The previous Open export link remains until a new generation is published; archived root links remain accessible afterward. Do not clear Chrome extension storage as a recovery method.
+- **Delete export** requires confirmation and the displayed bound Google account. It trashes only recorded `transcript.md` and `sync.json` files, including Notes in that transcript. Folders and untracked media are retained, even if a folder looks empty: `drive.file` may hide foreign children. A retained-folder link stays available after deletion. Interrupted cleanup retains state for retry. Drive trash/history and prior explicitly archived export trees are not erased.
 - After a new coherent generation is committed, old owned generation files are cleaned up. The panel reports pending cleanup when that cannot finish. Follow the latest **Open export** link rather than bookmarking an older generation file.
 
 ## Current media and source limitations
@@ -68,6 +71,7 @@ cd projects/wa-scribe
 npm ci
 npx playwright install chromium
 npm run typecheck
+npx vitest run tests/review-repro.test.ts
 npm run test:unit
 npm run test:browser
 npm run build

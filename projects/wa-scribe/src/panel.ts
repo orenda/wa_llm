@@ -5,7 +5,6 @@ import { bakedOAuth, DRIVE_FILE_SCOPE } from "./public-config";
 const APP_PROTOCOL = "wa-scribe.app";
 const INSTALL_URL = "https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/docs/INSTALL.md";
 const MAX_LIMIT = 500;
-const MAX_POLLS = 60;
 const GOOGLE_CLIENT_ID = /^[0-9]{6,}-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/;
 
 type ChatState = {
@@ -18,6 +17,7 @@ type ChatState = {
   lastSuccess: string | null;
   url: string | null;
   exportUrl?: string | null;
+  archives?: { url: string; accountId: string; generation: string; deleted?: boolean }[];
 };
 
 type AppState = {
@@ -58,8 +58,8 @@ const warningNode = byId("mode-warning", HTMLParagraphElement);
 const configureButton = byId("configure-drive", HTMLButtonElement);
 
 let current: AppState | null = null;
-let polls = 0;
 let pollTimer: number | undefined;
+let stateRequestInFlight = false;
 let actionBusy = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,7 +72,10 @@ function isChat(value: unknown): value is ChatState {
     typeof value.name === "string" && typeof value.selected === "boolean" && typeof value.result === "string" &&
     (value.lastSuccess === null || typeof value.lastSuccess === "string") &&
     (value.url === null || (typeof value.url === "string" && safeDriveUrl(value.url) !== null)) &&
-    (value.exportUrl === undefined || value.exportUrl === null || (typeof value.exportUrl === "string" && safeDriveUrl(value.exportUrl) !== null));
+    (value.exportUrl === undefined || value.exportUrl === null || (typeof value.exportUrl === "string" && safeDriveUrl(value.exportUrl) !== null)) &&
+    (value.archives === undefined || (Array.isArray(value.archives) && value.archives.every((archive) => isRecord(archive) &&
+      typeof archive.url === "string" && safeDriveUrl(archive.url) !== null && typeof archive.accountId === "string" && typeof archive.generation === "string" &&
+      (archive.deleted === undefined || typeof archive.deleted === "boolean"))));
 }
 
 function safeDriveUrl(value: string): string | null {
@@ -132,12 +135,12 @@ function action(type: Action, fields: Record<string, unknown> = {}): void {
 function updateControls(): void {
   const drive = current?.drive ?? null;
   const accountId = drive?.account?.permissionId;
-  connectButton.disabled = actionBusy || current === null || !current.setup || drive?.phase === "missing-setup";
-  probeButton.disabled = actionBusy || !accountId || drive?.phase === "missing-setup";
-  addButton.disabled = actionBusy || current === null;
-  configureButton.disabled = actionBusy;
-  refreshButton.disabled = false;
   const running = current?.job !== null && current?.job !== undefined;
+  connectButton.disabled = actionBusy || running || current === null || !current.setup || drive?.phase === "missing-setup";
+  probeButton.disabled = actionBusy || running || !accountId || drive?.phase === "missing-setup";
+  addButton.disabled = actionBusy || running || current === null;
+  configureButton.disabled = actionBusy || running;
+  refreshButton.disabled = false;
   stopButton.disabled = !running;
   const selected = current?.chats.some((chat) => chat.selected) ?? false;
   syncButton.disabled = actionBusy || !accountId || !selected || running;
@@ -171,7 +174,7 @@ function renderChats(): void {
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = chat.selected;
-    checkbox.disabled = actionBusy;
+    checkbox.disabled = actionBusy || (current?.job != null && !chat.selected);
     checkbox.setAttribute("aria-label", `Select ${chat.name}`);
     checkbox.addEventListener("change", () => action("select", { key: chat.key, selected: checkbox.checked }));
     title.append(checkbox);
@@ -187,14 +190,18 @@ function renderChats(): void {
       const safe = safeDriveUrl(candidateExportUrl);
       if (safe) addLink(controls, "Open export", safe);
     }
+    chat.archives?.forEach((archive, index) => {
+      const safe = safeDriveUrl(archive.url);
+      if (safe) addLink(controls, `${archive.deleted ? "Open retained folder" : "Open archived export"} ${index + 1}`, safe);
+    });
     for (const [label, type] of [["Recover", "recover"], ["Start fresh", "fresh"], ["Delete export", "delete"]] as const) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = label;
-      button.disabled = actionBusy;
+      button.disabled = actionBusy || (current?.job != null);
       button.addEventListener("click", () => {
         if (type === "fresh" && !window.confirm("Start a fresh export tree for this chat? The old tree will be preserved.")) return;
-        if (type === "delete" && !window.confirm("Delete this chat's owned export? Notes and media in the export will be deleted.")) return;
+        if (type === "delete" && !window.confirm("Trash only this export's recorded transcript.md and sync.json files? Export folders, untracked media, and earlier archived exports will be kept.")) return;
         const expectedAccountId = current?.drive?.account?.permissionId;
         if (!expectedAccountId) {
           setError("Connect Google Drive and confirm the account before changing this export.");
@@ -236,22 +243,28 @@ function applyState(state: AppState): void {
   updateControls();
   if (state.job) schedulePoll();
   else {
-    polls = 0;
     if (pollTimer !== undefined) window.clearTimeout(pollTimer);
     pollTimer = undefined;
   }
 }
 
 function schedulePoll(): void {
-  if (pollTimer !== undefined || polls >= MAX_POLLS) return;
+  if (pollTimer !== undefined || stateRequestInFlight) return;
   pollTimer = window.setTimeout(() => {
     pollTimer = undefined;
-    polls += 1;
-    send("state", {}, (reply) => {
-      if (reply?.state) applyState(reply.state);
-      else if (!reply) setError("Could not refresh sync status. Use Refresh to retry.");
-    });
+    refreshState("Could not refresh sync status. Use Refresh to retry.");
   }, 2000);
+}
+
+function refreshState(failureMessage: string): void {
+  if (stateRequestInFlight) return;
+  stateRequestInFlight = true;
+  send("state", {}, (reply) => {
+    stateRequestInFlight = false;
+    if (reply?.state) applyState(reply.state);
+    else if (!reply) setError(failureMessage);
+    if (current?.job) schedulePoll();
+  });
 }
 
 warningNode.textContent = "Edit mode can remove saved content. Text export is alpha; original media may be unavailable unless verified.";
@@ -287,11 +300,9 @@ probeButton.addEventListener("click", () => {
 });
 addButton.addEventListener("click", () => action("add-current"));
 refreshButton.addEventListener("click", () => {
-  polls = 0;
-  send("state", {}, (reply) => {
-    if (reply?.state) applyState(reply.state);
-    else setError("The extension could not refresh panel state.");
-  });
+  if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+  pollTimer = undefined;
+  refreshState("The extension could not refresh panel state.");
 });
 stopButton.addEventListener("click", () => action("stop"));
 modeSelect.addEventListener("change", () => {
@@ -312,7 +323,4 @@ syncButton.addEventListener("click", () => {
   });
 });
 
-send("state", {}, (reply) => {
-  if (reply?.state) applyState(reply.state);
-  else setError("The extension could not load panel state. Use Refresh to retry.");
-});
+refreshState("The extension could not load panel state. Use Refresh to retry.");

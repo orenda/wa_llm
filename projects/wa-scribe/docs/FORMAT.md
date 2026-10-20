@@ -62,6 +62,8 @@ Each message stores `sourceBaseline` and `savedWordingBaseline` separately, so a
 
 `tombstones` are `{ "messageId", "reason": "local-deletion" }`. They are disjoint from saved messages and produce no transcript block. Coverage stores `segments` (`messageIds`, `anchorBefore`, `anchorAfter`), `gaps` (`afterId`, `beforeId`, `reason`), `requestedScope`, and `stopReason`. The codec keeps those arrays as given. It does not join segments or close a gap.
 
+`sourceOrder: verified` establishes the ordering of saved messages, not a complete chat archive. Reconciliation retains the collector's `stopReason`, including `visible-window`, `message-budget`, `byte-budget`, and `time-budget`. Without supplied boundary evidence it records `visible-window` for rendered scope or `scope-boundary-unverified` otherwise. A non-null stop reason or any gap means partial coverage; `visible` and `loaded` scopes are also partial when legacy metadata has a null stop reason. A null legacy reason does not prove completeness for either bounded scope. The panel derives status from the same coverage record. Repeating an identical pass can be unchanged while its coverage remains partial.
+
 Every saved message ID appears in exactly one segment. Extra segment IDs are rejected. That check does not turn unknown order into verified order.
 
 ## Failures
@@ -143,7 +145,7 @@ See you at the gate.
     ],
     "gaps": [],
     "requestedScope": "all-available",
-    "stopReason": null
+    "stopReason": "scope-boundary-unverified"
   }
 }
 ```

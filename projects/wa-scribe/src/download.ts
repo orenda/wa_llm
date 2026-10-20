@@ -29,6 +29,11 @@ export function sameBinding(left: Binding, right: Binding): boolean {
   return left.accountId === right.accountId && left.chatId === right.chatId && left.destinationId === right.destinationId && left.generation === right.generation;
 }
 
+export function coverageStatus(coverage: Coverage): "partial" | "committed" {
+  return coverage.stopReason !== null || coverage.gaps.length > 0 || coverage.requestedScope === "visible" || coverage.requestedScope === "loaded"
+    ? "partial" : "committed";
+}
+
 /** Both chains must establish a unique order; array position is not new evidence. */
 function mergeIds(committed: readonly string[], observed: readonly string[], contiguous: boolean): { ids: string[] } | { conflict: true } | { disjoint: string[] } {
   const saved = new Set(committed);
@@ -108,11 +113,17 @@ function uniqueKept(messages: readonly SavedMessage[], blocks: readonly ParsedBl
   return kept;
 }
 
-function applyLocalDeletions(markdown: string, chat: ChatExport): { chat: ChatExport; prefix: string } | { reason: "local-edit" | "ambiguous-local" } {
+function applyLocalDeletions(markdown: string, chat: ChatExport): { chat: ChatExport; prefix: string } | { reason: "local-edit" | "ambiguous-local"; unresolved: string[] } {
   const parsed = parseTranscript(markdown);
-  if (!parsed.ok) return { reason: "ambiguous-local" };
+  if (!parsed.ok) return { reason: "ambiguous-local", unresolved: [] };
   const kept = uniqueKept(chat.messages, parsed.value.blocks);
-  if (kept === "ambiguous") return { reason: parsed.value.blocks.length === chat.messages.length ? "local-edit" : "ambiguous-local" };
+  if (kept === "ambiguous") {
+    const sameLength = parsed.value.blocks.length === chat.messages.length;
+    const currentKeys = parsed.value.blocks.map(blockKey);
+    return { reason: sameLength ? "local-edit" : "ambiguous-local", unresolved: sameLength
+      ? chat.messages.filter((message, index) => blockKey(message) !== currentKeys[index]).map((message) => message.id)
+      : [] };
+  }
   const keep = new Set(kept);
   const removed = chat.messages.filter((_, index) => !keep.has(index));
   const messages = chat.messages.filter((_, index) => keep.has(index));
@@ -204,6 +215,7 @@ export function downloadPass(input: {
   order: "verified" | "unknown";
   contiguous: boolean;
   requestedScope: string;
+  stopReason?: string;
 }): DownloadResult {
   if (input.chat && !sameBinding(input.chat, input.binding)) return pause("binding-mismatch", input.markdown, input.chat);
   if ((input.chat === null) !== (input.markdown === null)) return pause("missing-state", input.markdown, input.chat);
@@ -213,7 +225,7 @@ export function downloadPass(input: {
   let prefix = input.prefix;
   if (chat && input.markdown !== null) {
     const local = applyLocalDeletions(input.markdown, chat);
-    if ("reason" in local) return pause(local.reason, input.markdown, chat);
+    if ("reason" in local) return pause(local.reason, input.markdown, chat, local.unresolved);
     chat = local.chat;
     prefix = local.prefix;
   }
@@ -229,6 +241,7 @@ export function downloadPass(input: {
   if ("disjoint" in merged) return pause("disjoint", input.markdown, input.chat, merged.disjoint);
   const inserted = merged.ids.filter((id) => !chat?.messages.some((message) => message.id === id));
   const gaps = gapsFor(merged.ids, chat?.coverage, input.observed.map((message) => message.id), input.contiguous && input.order === "verified");
+  const stopReason = input.stopReason || (input.requestedScope === "visible" ? "visible-window" : "scope-boundary-unverified");
   const messages = draftsFor(merged.ids, chat, input.observed);
   const draft: ExportDraft = {
     ...input.binding,
@@ -237,7 +250,7 @@ export function downloadPass(input: {
     sourceOrder: gaps.length === 0 && messages.every((message) => message.sequence === "verified") ? "verified" : "unknown",
     messages,
     tombstones: chat?.tombstones ?? [],
-    coverage: { segments: segmentsFor(merged.ids, gaps), gaps, requestedScope: input.requestedScope, stopReason: gaps.length ? "unverified-between" : null },
+    coverage: { segments: segmentsFor(merged.ids, gaps), gaps, requestedScope: input.requestedScope, stopReason },
   };
   const encoded = encodeExport(prefix, draft);
   if (!encoded.ok) return pause("missing-state", input.markdown, input.chat);

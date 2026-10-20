@@ -16,15 +16,12 @@ export function editPass(input: {
   order: "verified" | "unknown";
   contiguous: boolean;
   requestedScope: string;
+  stopReason?: string;
 }): EditResult {
   // Download validates binding and exact local block alignment before any source change.
   const placed = downloadPass(input);
   if (placed.phase === "paused" || !placed.chat || placed.markdown === null) {
-    const parsed = input.markdown === null ? null : parseTranscript(input.markdown);
-    const conflicts = placed.reason === "local-edit" && parsed?.ok
-      ? input.chat?.messages.filter((message, index) => parsed.value.blocks[index]?.blockFingerprint !== message.blockFingerprint).map((message) => message.id) ?? []
-      : [];
-    return { ...placed, conflicts };
+    return { ...placed, conflicts: placed.reason === "local-edit" ? placed.unresolved : [] };
   }
   const deleted = new Set(input.deletedIds);
   const observed = new Map(input.observed.map((message) => [message.id, message]));

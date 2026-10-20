@@ -1,10 +1,10 @@
 import { chromeHttp, handleDrive, identityToken, removeToken } from "./chrome-drive";
-import { downloadPass, type ObservedMessage } from "./download";
+import { coverageStatus, downloadPass, type ObservedMessage } from "./download";
 import { editPass } from "./edit";
 import { alignByOrder, decodeMetadata, parseTranscript } from "./format";
 import { bakedOAuth, oauthReady } from "./public-config";
 import type { DriveAccount, DriveResult, HttpRequest } from "./drive";
-import type { AttachmentSlot, Binding } from "./model";
+import type { AttachmentSlot, Binding, Coverage } from "./model";
 import type { CollectedChat, OpenChat } from "./whatsapp";
 
 export const APP_PROTOCOL = "wa-scribe.app";
@@ -23,6 +23,7 @@ type Pending = {
   beforeHash: string | null;
   stage: "prepared" | "folder" | "markdown" | "metadata" | "publish";
 };
+type Archive = { accountId: string; rootId: string; generation: string; exportId?: string; deleted?: boolean };
 type Chat = OpenChat & {
   key: string;
   selected: boolean;
@@ -34,7 +35,7 @@ type Chat = OpenChat & {
   pending: Pending | null;
   retired: Generation[];
   deleting: boolean;
-  archives: { accountId: string; rootId: string; generation: string }[];
+  archives: Archive[];
   result: string;
   lastSuccess: string | null;
 };
@@ -72,7 +73,8 @@ function chatRecord(value: unknown): value is Chat {
     (value.driveAccountId === null || id(value.driveAccountId)) && (value.rootId === null || id(value.rootId)) && typeof value.rootReady === "boolean" && typeof value.deleting === "boolean" &&
     (value.current === null || generation(value.current)) && (value.pending === null || pending(value.pending)) &&
     Array.isArray(value.retired) && value.retired.every(generation) && Array.isArray(value.archives) &&
-    value.archives.every((entry) => record(entry) && id(entry.accountId) && id(entry.rootId) && id(entry.generation)) &&
+    value.archives.every((entry) => record(entry) && id(entry.accountId) && id(entry.rootId) && id(entry.generation) &&
+      (entry.exportId === undefined || id(entry.exportId)) && (entry.deleted === undefined || typeof entry.deleted === "boolean")) &&
     typeof value.result === "string" && (value.lastSuccess === null || typeof value.lastSuccess === "string");
 }
 
@@ -113,13 +115,25 @@ async function persist(): Promise<void> {
   await writes;
 }
 
+function folderUrl(fileId: string): string { return `https://drive.google.com/drive/folders/${fileId}`; }
+function exportUrl(chat: Chat): string | null {
+  if (chat.current) return folderUrl(chat.current.folderId);
+  const previous = chat.archives.at(-1);
+  return previous && !previous.deleted ? folderUrl(previous.exportId ?? previous.rootId) : null;
+}
+function coverageCopy(coverage: Coverage, unchanged = false): string {
+  const status = coverageStatus(coverage) === "partial" ? "Partial" : "Committed";
+  const reason = coverage.stopReason ?? (coverage.gaps.length ? "unverified-between" : status === "Partial" ? "scope-boundary-unverified" : null);
+  return `${unchanged ? "Unchanged; " : ""}${status}${reason ? `: ${reason}` : ""}`;
+}
 function publicState() {
   return {
     revision, drive, setup: oauthReady(bakedOAuth()), job: saved?.job ?? null,
     chats: (saved?.chats ?? []).map((chat) => ({
       key: chat.key, accountId: chat.accountId, chatId: chat.chatId, name: chat.name,
       selected: chat.selected, result: chat.result, lastSuccess: chat.lastSuccess,
-      url: chat.current ? `https://drive.google.com/drive/folders/${chat.current.folderId}` : null,
+      url: exportUrl(chat),
+      archives: chat.archives.map((entry) => ({ url: folderUrl(entry.rootId), accountId: entry.accountId, generation: entry.generation, deleted: entry.deleted === true })),
     })),
   };
 }
@@ -261,7 +275,7 @@ async function publish(access: Access, chat: Chat): Promise<void> {
   const parsed = parseTranscript(p.markdown);
   if (!parsed.ok || !alignByOrder(parsed.value.blocks, decoded.value.messages, p.markdown).ok) throw new Error("Pending transcript and metadata disagree. Recovery paused without changing files.");
   const previous = await currentFiles(access, chat);
-  if ((previous ? await digest(JSON.stringify([previous.markdown, previous.metadata])) : null) !== p.beforeHash) throw new Error("The saved export changed after capture. Finish editing and start a fresh pass; pending files were preserved.");
+  if ((previous ? await digest(JSON.stringify([previous.markdown, previous.metadata])) : null) !== p.beforeHash) throw new Error("The saved export changed after capture. Pending data was retained. Restore the captured export version before Recover.");
   const g = p.target;
   p.stage = "folder"; await persist();
   await create(access, g.folderId, `export-${p.operationId}`, chat.rootId, operationFor(g), null);
@@ -274,7 +288,7 @@ async function publish(access: Access, chat: Chat): Promise<void> {
   if ((recheck ? await digest(JSON.stringify([recheck.markdown, recheck.metadata])) : null) !== p.beforeHash) throw new Error("The saved export changed during the pass. The prior export remains current.");
   if (stopped) throw new Error("Stopped before publication. Recover the staged generation explicitly.");
   const old = chat.current;
-  chat.current = g; chat.pending = null; chat.lastSuccess = new Date().toISOString();
+  chat.current = g; chat.pending = null; chat.lastSuccess = new Date().toISOString(); chat.result = coverageCopy(decoded.value.coverage);
   if (old) chat.retired.push(old);
   await persist();
   // Cleanup is separate from commit; an unknown delete cannot resurrect or overwrite current IDs.
@@ -390,11 +404,13 @@ async function exportChat(access: Access, chat: Chat, mode: "download" | "edit",
   const decoded = previous ? decodeMetadata(previous.metadata, bound) : null;
   if (decoded && !decoded.ok) throw new Error("The saved metadata needs recovery. Existing transcript and media were preserved.");
   const input = { prefix: "", markdown: previous?.markdown ?? null, chat: decoded?.ok ? decoded.value : null, binding: bound,
-    chatKey: chat.key, displayName: observed.chat.name, observed: observed.messages, order: observed.order, contiguous: observed.contiguous, requestedScope: scope };
+    chatKey: chat.key, displayName: observed.chat.name, observed: observed.messages, order: observed.order, contiguous: observed.contiguous, requestedScope: scope, stopReason: observed.stopReason };
   const result = mode === "edit" ? editPass({ ...input, deletedIds: observed.deletedIds }) : downloadPass(input);
-  if (result.phase === "paused" || result.markdown === null || result.metadata === null) throw new Error(`Export paused: ${result.reason ?? "source/metadata conflict"}. Existing content was preserved.`);
-  const limitations = observed.messages.reduce((count, message) => count + message.attachments.length, 0);
-  chat.result = `Partial: ${observed.stopReason}; ${observed.messages.length} observed messages${limitations ? `; ${limitations} attachments unavailable` : ""}`;
+  if (result.phase === "paused" || result.markdown === null || result.metadata === null || result.chat === null) {
+    const conflicts = result.unresolved.length ? ` Blocks: ${result.unresolved.join(", ")}.` : "";
+    throw new Error(`Export paused: ${result.reason ?? "source/metadata conflict"}.${conflicts} Existing content was preserved.`);
+  }
+  chat.result = coverageCopy(result.chat.coverage, result.phase === "unchanged");
   if (result.phase === "unchanged") { await persist(); return; }
   if (encoder.encode(result.markdown + result.metadata).byteLength > MAX_PENDING_BYTES) throw new Error("This pass exceeds the 256 KiB pending-save budget. Reduce the message limit.");
   const ids = await allocate(access, 3);
@@ -475,16 +491,23 @@ export async function handleApp(message: AppRequest): Promise<AppReply> {
       try {
         const access = await accessFor(chat.driveAccountId);
         if (chat.pending) await publish(access, chat);
-        else if (chat.retired.length) { await ensureDestination(access, chat); await cleanup(access, chat); }
+        else if (chat.retired.length) {
+          await ensureDestination(access, chat); await cleanup(access, chat);
+          const current = await currentFiles(access, chat);
+          const decoded = current ? decodeMetadata(current.metadata, binding(chat)) : null;
+          if (!decoded?.ok) throw new Error("Current coverage could not be verified after cleanup.");
+          chat.result = `${coverageCopy(decoded.value.coverage)}; ${chat.retired.length ? "previous generation cleanup pending" : "cleanup finished"}`;
+        }
         else throw new Error("This export has no pending generation or cleanup to recover.");
-        chat.result = "Recovered coherent generation; source collection did not resume"; await persist();
+        await persist();
       }
       finally { active = false; }
     } else if (message.type === "fresh") {
       const chat = selectedChat(message);
-      if (chat.deleting) throw new Error("Complete the pending deletion before choosing a fresh export.");
+      if (chat.pending || chat.deleting || chat.retired.length) throw new Error("Recover the pending save or cleanup, or complete deletion, before choosing a fresh export. Staged data was preserved.");
       if (stringField(message, "expectedAccountId") !== drive?.account?.permissionId) throw new Error("Review the currently connected Google account before choosing a fresh destination.");
-      if (chat.rootId && chat.driveAccountId) chat.archives.push({ accountId: chat.driveAccountId, rootId: chat.rootId, generation: chat.generation });
+      if (chat.rootId && chat.driveAccountId) chat.archives.push({ accountId: chat.driveAccountId, rootId: chat.rootId, generation: chat.generation,
+        ...(chat.current ? { exportId: chat.current.folderId } : {}) });
       chat.generation = crypto.randomUUID(); chat.rootId = null; chat.rootReady = false; chat.current = null; chat.pending = null; chat.driveAccountId = null; chat.retired = [];
       chat.result = "Fresh export selected; previous tree preserved; old tombstones were not inherited"; chat.lastSuccess = null; await persist();
     } else if (message.type === "delete") {
@@ -503,6 +526,7 @@ export async function handleApp(message: AppRequest): Promise<AppReply> {
         chat.deleting = true; await persist();
         if (chat.current) await deleteGeneration(access, chat.current, chat.rootId);
         for (const old of chat.retired) await deleteGeneration(access, old, chat.rootId);
+        chat.archives.push({ accountId: chat.driveAccountId, rootId: chat.rootId, generation: chat.generation, deleted: true });
         chat.rootId = null; chat.rootReady = false; chat.current = null; chat.driveAccountId = null; chat.generation = crypto.randomUUID(); chat.selected = false;
         chat.deleting = false; chat.retired = []; chat.result = "Owned export files moved to Drive trash; foreign files and earlier destinations were untouched"; chat.lastSuccess = null; await persist();
       } catch (error) {

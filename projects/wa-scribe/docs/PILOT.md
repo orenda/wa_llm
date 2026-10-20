@@ -17,8 +17,10 @@ Start with one low-sensitivity chat, Download mode, Rendered messages, and 20 me
 - Try older loaded history at small limits. Newly revealed old/middle IDs must not be discarded by last-sync timestamps. Unverified gaps/order remain partial or paused.
 - Stop, unselect the active chat, switch chats, close/reload the tab, and restart Chrome at separate boundaries. Collection never resumes without a click; pending Drive generations remain explicit.
 - Recover an interrupted generation only after reconnecting the bound Google account. A changed transcript/sidecar must pause recovery rather than erase edits.
-- Start fresh explicitly. The old tree stays intact and tombstones are not silently inherited.
-- Confirm Delete on one generation. Only its recorded owned files are trashed; a foreign child must remain. Interrupted deletion must remain retryable and block sync of that old generation.
+- While a save or cleanup is unresolved, Start fresh must fail without changing the staged content or IDs, including after restarting the worker. Once resolved, Start fresh keeps the previous Open export link until a replacement is published, exposes archived root links and does not silently inherit tombstones.
+- Compare the panel's coverage reason with `sync.json` after rendered, message-, byte- and time-limited passes and an identical resync. None is a complete-archive claim.
+- Confirm Delete on one generation. Only recorded transcript/sidecar files are trashed; folders, foreign children and untracked media remain. A retained-folder link stays available. Interrupted deletion must remain retryable and block sync of that old generation.
+- During a long multi-chat job, Recover/Start fresh/Delete stay disabled and polling continues past two minutes; Stop, Refresh and unselect remain available.
 - Register a second chat. A selected chat not currently open reports a pause rather than navigating by name; another chat's result remains independent.
 - Verify each media envelope reports unavailable/unsupported originals honestly; thumbnails and view-once media must never become successful original links.
 

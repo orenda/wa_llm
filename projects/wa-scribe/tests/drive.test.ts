@@ -400,11 +400,14 @@ describe("drive probe", () => {
       });
       expect(failed).toMatchObject({ phase: "unknown-mutation", warning: "previous-unknown", httpStatus: status });
       expect(panelCopy(failed).status).toContain(`HTTP ${status}`);
+      expect(failed.pendingId).toBe(unresolvedKey(store.current()));
       expect(store.current()).toEqual({
         accountId: "perm-1",
         rootId: "root-old",
         files: [{ name: "note.md", id: "old-file" }],
         pendingMutation: true,
+        pendingRevision: expect.any(String),
+        pendingAccountId: "perm-1",
       });
       expect(drive.calls).toHaveLength(2);
       const later = scripted();
@@ -466,7 +469,14 @@ describe("drive probe", () => {
       });
       expect(failed.warning).toBe("previous-unknown");
       expect(failed.phase).toBe(status === 401 ? "auth-expired" : "http-error");
-      expect(store.current()).toEqual({ accountId: "perm-1", rootId: "root-old", files: [{ name: "note.md", id: "old-file" }], pendingMutation: true });
+      expect(store.current()).toEqual({
+        accountId: "perm-1",
+        rootId: "root-old",
+        files: [{ name: "note.md", id: "old-file" }],
+        pendingMutation: true,
+        pendingRevision: key,
+        pendingAccountId: "perm-1",
+      });
       expect(rejected.calls.filter((call) => call.method === "POST")).toHaveLength(1);
       expect(removed).toEqual(status === 401 ? [tokenText] : []);
 
