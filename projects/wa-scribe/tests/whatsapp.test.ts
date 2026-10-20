@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { inspectWhatsApp } from "../src/whatsapp";
 
-type Row = { getAttribute: (name: string) => string | null; closest: (selector: string) => unknown | null };
+type Row = { getAttribute: (name: string) => string | null; closest: (selector: string) => unknown | null; querySelector: (selector: string) => unknown | null };
 
 function row(id: string, quoted = false): Row {
   return {
     getAttribute: (name) => name === "data-id" ? id : null,
     closest: (selector) => quoted && selector === "[data-testid='quoted-message']" ? {} : null,
+    querySelector: () => null,
   };
 }
 
@@ -26,7 +27,7 @@ function fixture(ids: string[], options: { bubbleCount?: number; header?: string
   vi.stubGlobal("localStorage", { getItem: (key: string) => key === "last-wid" ? "15551234567@c.us" : null });
 }
 
-function diagnostic(result: ReturnType<typeof inspectWhatsApp>): { counts: Record<string, number> } {
+function diagnostic(result: ReturnType<typeof inspectWhatsApp>): { counts: Record<string, number>; structures: unknown[] } {
   expect(result.ok).toBe(false);
   if (result.ok) throw new Error("Expected identity inspection to fail.");
   const marker = "Identity diagnostic: ";
@@ -38,11 +39,17 @@ function diagnostic(result: ReturnType<typeof inspectWhatsApp>): { counts: Recor
     throw new Error("Identity diagnostic has an unexpected shape.");
   }
   const counts: Record<string, number> = {};
+  let structures: unknown[] = [];
   for (const [key, value] of Object.entries(parsed)) {
+    if (key === "structures") {
+      if (!Array.isArray(value)) throw new Error("Missing structural profiles.");
+      structures = value;
+      continue;
+    }
     if (typeof value !== "number") throw new Error("Identity diagnostic count is not numeric.");
     counts[key] = value;
   }
-  return { counts };
+  return { counts, structures };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -113,5 +120,33 @@ describe("WhatsApp conversation identity", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     for (const secret of [...ids, "15551234567@c.us", "Secret contact header"]) expect(result.reason).not.toContain(secret);
+  });
+
+  it("aggregates opaque IDs into value-free structural profiles", () => {
+    fixture(["secret-one", "private-two", "third-four"]);
+    expect(diagnostic(inspectWhatsApp()).structures).toEqual([{
+      shape: ["value", "dash", "value"], directionPrefix: false, whitespace: false, percentEncoding: false,
+      knownJidMarkers: [], hasText: false, hasEnvelope: false, count: 3,
+    }]);
+  });
+
+  it("redacts Unicode and wrapped IDs while preserving only known format markers", () => {
+    const id = ' {"private-name-שלום-😀":"15550001111@c.us","message":"secret-message"} ';
+    fixture([id]);
+    const result = inspectWhatsApp();
+    const report = diagnostic(result);
+    expect(report.structures[0]).toMatchObject({ knownJidMarkers: ["c.us"], directionPrefix: false, whitespace: true, count: 1 });
+    if (result.ok) throw new Error("Expected a rejected wrapped ID");
+    for (const secret of [id, "private-name", "שלום", "😀", "15550001111", "secret-message"]) expect(result.reason).not.toContain(secret);
+  });
+
+  it("bounds structural detail for long IDs and many distinct layouts", () => {
+    fixture(Array.from({ length: 20 }, (_, index) => `bad${"_".repeat(index + 1)}${"@".repeat(100)}`));
+    const structures = diagnostic(inspectWhatsApp()).structures;
+    expect(structures).toHaveLength(6);
+    for (const structure of structures) {
+      if (typeof structure !== "object" || structure === null || !("shape" in structure) || !Array.isArray(structure.shape)) throw new Error("Invalid profile");
+      expect(structure.shape).toHaveLength(64);
+    }
   });
 });

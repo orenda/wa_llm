@@ -52,8 +52,26 @@ function messageRows(main: Element): HTMLElement[] {
   });
 }
 
+function idStructure(row: Element) {
+  const value = (row.getAttribute("data-id") ?? "").slice(0, 256);
+  const separators: Record<string, string> = { "_": "underscore", "@": "at", ".": "dot", ":": "colon", "-": "dash", "/": "slash", "%": "percent",
+    "{": "open-object", "}": "close-object", "[": "open-array", "]": "close-array", '"': "quote", ",": "comma", "\\": "backslash" };
+  const shape = Array.from(value, (char) => separators[char] ?? (/\s/u.test(char) ? "space" : "value"))
+    .filter((kind, index, kinds) => kind !== "value" || kinds[index - 1] !== "value").slice(0, 64);
+  return { shape, directionPrefix: /^(true|false)_/.test(value), whitespace: /\s/u.test(value), percentEncoding: /%[0-9a-f]{2}/i.test(value),
+    knownJidMarkers: ["c.us", "g.us", "lid", "s.whatsapp.net"].filter((domain) => value.includes(`@${domain}`)),
+    hasText: row.querySelector(".selectable-text") !== null, hasEnvelope: row.querySelector("[data-pre-plain-text]") !== null };
+}
+
 function identityDiagnostic(main: Element, recognizedRows: number, conversationIds: number) {
   const candidates = Array.from(main.querySelectorAll("[data-id]"));
+  const structures = new Map<string, ReturnType<typeof idStructure> & { count: number }>();
+  for (const row of candidates.slice(0, 64)) {
+    if (row.closest("[data-testid='quoted-message']")) continue;
+    const structure = idStructure(row), signature = JSON.stringify(structure), previous = structures.get(signature);
+    if (previous) previous.count += 1;
+    else if (structures.size < 6) structures.set(signature, { ...structure, count: 1 });
+  }
   let quotedRows = 0, invalidShape = 0, unsupportedChatIds = 0;
   for (const row of candidates) {
     if (row.closest("[data-testid='quoted-message']")) { quotedRows += 1; continue; }
@@ -61,9 +79,11 @@ function identityDiagnostic(main: Element, recognizedRows: number, conversationI
     if (!match?.[2]) invalidShape += 1;
     else if (!JID.test(match[2])) unsupportedChatIds += 1;
   }
-  // Counts only: never return DOM attributes, text, names or account/message IDs.
+  // Only counts, fixed enum tokens and booleans; no DOM values, text, names or IDs.
   return { dataIds: candidates.length, recognizedRows, quotedRows, invalidShape, unsupportedChatIds,
-    conversationIds, messageBubbles: main.querySelectorAll(".message-in, .message-out").length };
+    conversationIds, messageBubbles: main.querySelectorAll(".message-in, .message-out").length,
+    textEnvelopes: main.querySelectorAll("[data-pre-plain-text]").length, selectableTextNodes: main.querySelectorAll(".selectable-text").length,
+    structures: [...structures.values()] };
 }
 
 export function inspectWhatsApp(): { ok: true; chat: OpenChat; rendered: number } | { ok: false; reason: string } {
