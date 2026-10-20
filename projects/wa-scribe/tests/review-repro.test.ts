@@ -139,6 +139,29 @@ async function sync(service: Awaited<ReturnType<typeof worker>>) {
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("review regressions on the installed export path", () => {
+  it("directs Sync only to Recover after a lost create and preserves pending data when fresh is refused", async () => {
+    const store = harness(seed({ current: null }), "visible-window", true);
+    const service = await worker();
+    const pendingRecord = () => {
+      const saved = store.read();
+      if (!record(saved) || !Array.isArray(saved.chats) || !record(saved.chats[0])) throw new Error("Missing saved chat");
+      return saved.chats[0].pending;
+    };
+    await sync(service);
+    const pending = pendingRecord();
+    expect(pending).toMatchObject({ target: { folderId: "new-generation", markdownId: "new-markdown", metadataId: "new-metadata" } });
+
+    const retried = await sync(service);
+    expect(retried.state.chats[0]?.result).toBe("Recovery required: Use Recover to finish the pending generation before another pass.");
+    expect(pendingRecord()).toEqual(pending);
+
+    const beforeFresh = store.read();
+    const fresh = await service.handleApp({ protocol: PROTOCOL, type: "fresh", key: "registered-1", expectedAccountId: "google-1" });
+    expect(fresh.ok).toBe(false);
+    expect(fresh.error).toContain("Recover the pending save");
+    expect(store.read()).toEqual(beforeFresh);
+  });
+
   it("retains the only staged pass and IDs when Start fresh is attempted after a lost create and restart", async () => {
     const store = harness(seed({ current: null }), "visible-window", true);
     const service = await worker();

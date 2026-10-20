@@ -394,7 +394,7 @@ async function collect(chat: Chat, limit: number, scope: "visible" | "loaded"): 
 async function exportChat(access: Access, chat: Chat, mode: "download" | "edit", scope: "visible" | "loaded", limit: number): Promise<void> {
   if (!saved) return;
   if (chat.deleting) throw new Error("Finish the pending explicit deletion before syncing this export.");
-  if (chat.pending) throw new Error("Recover or explicitly start a fresh export before another pass.");
+  if (chat.pending) throw new Error("Use Recover to finish the pending generation before another pass.");
   saved.job = { phase: "collecting", chatKey: chat.key, count: 0, reason: null }; await persist();
   const observed = await collect(chat, limit, scope);
   if (stopped || !chat.selected) throw new Error("Stopped before destination writes.");
