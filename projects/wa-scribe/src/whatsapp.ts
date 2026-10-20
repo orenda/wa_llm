@@ -12,6 +12,7 @@ export type CollectedChat = {
 };
 
 type MessageKey = { id: string; chatId: string; outgoing: boolean; senderId: string | null };
+const MESSAGE_ID = /^(true|false)_([^_]+)_([^\s]+)$/;
 const JID = /^\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)$/;
 const ACCOUNT_JID = /^\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net)$/;
 
@@ -35,7 +36,7 @@ function accountId(): string | null {
 
 function messageKey(row: Element): MessageKey | null {
   const id = row.getAttribute("data-id") ?? "";
-  const match = /^(true|false)_([^_]+)_([^\s]+)$/.exec(id);
+  const match = MESSAGE_ID.exec(id);
   if (!match?.[2] || !JID.test(match[2]) || !match[3]) return null;
   const sender = /_(\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net))$/.exec(match[3]);
   return { id, chatId: match[2], outgoing: match[1] === "true", senderId: sender?.[1] ?? null };
@@ -51,6 +52,20 @@ function messageRows(main: Element): HTMLElement[] {
   });
 }
 
+function identityDiagnostic(main: Element, recognizedRows: number, conversationIds: number) {
+  const candidates = Array.from(main.querySelectorAll("[data-id]"));
+  let quotedRows = 0, invalidShape = 0, unsupportedChatIds = 0;
+  for (const row of candidates) {
+    if (row.closest("[data-testid='quoted-message']")) { quotedRows += 1; continue; }
+    const match = MESSAGE_ID.exec(row.getAttribute("data-id") ?? "");
+    if (!match?.[2]) invalidShape += 1;
+    else if (!JID.test(match[2])) unsupportedChatIds += 1;
+  }
+  // Counts only: never return DOM attributes, text, names or account/message IDs.
+  return { dataIds: candidates.length, recognizedRows, quotedRows, invalidShape, unsupportedChatIds,
+    conversationIds, messageBubbles: main.querySelectorAll(".message-in, .message-out").length };
+}
+
 export function inspectWhatsApp(): { ok: true; chat: OpenChat; rendered: number } | { ok: false; reason: string } {
   const main = document.querySelector<HTMLElement>("#main");
   if (!main || document.querySelectorAll("#main").length !== 1) return { ok: false, reason: "Open a WhatsApp conversation first." };
@@ -58,7 +73,10 @@ export function inspectWhatsApp(): { ok: true; chat: OpenChat; rendered: number 
   if (!account) return { ok: false, reason: "WhatsApp did not expose a verifiable account ID. Sign in and reload WhatsApp Web." };
   const rows = messageRows(main);
   const ids = new Set(rows.map((row) => messageKey(row)?.chatId).filter((id): id is string => id !== undefined));
-  if (ids.size !== 1) return { ok: false, reason: "The open chat has no unambiguous message-based conversation ID. No chat name will be used as identity." };
+  if (ids.size !== 1) {
+    const reason = ids.size === 0 ? "No supported message-based conversation ID was found in the open chat." : "The open chat contains multiple message-based conversation IDs.";
+    return { ok: false, reason: `${reason} Identity diagnostic: ${JSON.stringify(identityDiagnostic(main, rows.length, ids.size))}` };
+  }
   const chatId = [...ids][0];
   if (!chatId) return { ok: false, reason: "No stable conversation ID is available." };
   const header = main.querySelector<HTMLElement>("header span[title], header [data-testid='conversation-info-header-chat-title']");
