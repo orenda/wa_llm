@@ -1,6 +1,6 @@
 # Installable alpha: owner verification next
 
-The integrated source is on `codex/wa-scribe-complete`. The 0.1.3 compatibility alpha resolves opaque rendered message IDs against native message primary keys without reading database message records. The owner's sanitized checks established a unique mapping for four visible messages; the updated extension still needs a Chrome retry. See [identity evidence and bounds](docs/reviews/OPAQUE-IDENTITY.md). `install/BUILD.txt` records the exact source and verification for the ZIP. Browser tests, CI and live export remain unverified.
+The integrated source is on `codex/wa-scribe-complete`. The 0.1.4 UI alpha simplifies the panel around added-chat checkboxes and Sync. The owner reported that the preceding identity fix registered a chat and produced a partial saved export with an unsupported-envelope limitation. Raw export contents remain unchecked. See [identity evidence and bounds](docs/reviews/OPAQUE-IDENTITY.md) and [the intended chat-list/Google flow](docs/UX.md). `install/BUILD.txt` records this delivery's source and checks; earlier test counts are historical.
 
 [Install the ZIP and configure Google Drive](docs/INSTALL.md). The panel can add the currently open WhatsApp conversation, select known chats, run bounded Download/Edit, stop, recover a staged Drive generation, start fresh, and delete owned export files after confirmation. Media with unverified originals remains explicitly unavailable. If stable account/chat identity is unavailable, the adapter pauses instead of guessing.
 

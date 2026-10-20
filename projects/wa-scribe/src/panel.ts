@@ -42,7 +42,10 @@ const statusNode = byId("status", HTMLParagraphElement);
 const accountNode = byId("account", HTMLParagraphElement);
 const noticeNode = byId("notice", HTMLParagraphElement);
 const driveActions = byId("drive-actions", HTMLDivElement);
+const driveConnect = byId("drive-connect", HTMLDivElement);
+const driveTools = byId("drive-tools", HTMLDetailsElement);
 const chatList = byId("chat-list", HTMLDivElement);
+const chatEmpty = byId("chat-empty", HTMLParagraphElement);
 const jobNode = byId("job-status", HTMLParagraphElement);
 const errorNode = byId("action-error", HTMLParagraphElement);
 const limitInput = byId("history-limit", HTMLInputElement);
@@ -135,6 +138,10 @@ function action(type: Action, fields: Record<string, unknown> = {}): void {
 function updateControls(): void {
   const drive = current?.drive ?? null;
   const accountId = drive?.account?.permissionId;
+  const connected = current?.setup === true && !!accountId && drive !== null && ["connected", "verified", "account-changed", "root-missing"].includes(drive.phase);
+  const connectContainer = connected ? driveActions : driveConnect;
+  if (connectButton.parentElement !== connectContainer) connectContainer.prepend(connectButton);
+  connectButton.textContent = connected ? "Reconnect Google Drive" : "Connect Google Drive";
   const running = current?.job !== null && current?.job !== undefined;
   connectButton.disabled = actionBusy || running || current === null || !current.setup || drive?.phase === "missing-setup";
   probeButton.disabled = actionBusy || running || !accountId || drive?.phase === "missing-setup";
@@ -145,6 +152,7 @@ function updateControls(): void {
   const selected = current?.chats.some((chat) => chat.selected) ?? false;
   syncButton.disabled = actionBusy || !accountId || !selected || running;
   driveActions.hidden = !(current?.setup ?? false);
+  configureButton.hidden = current?.setup === true && drive?.phase !== "missing-setup";
 }
 
 function addText(parent: Element, tag: string, text: string, className?: string): HTMLElement {
@@ -164,9 +172,32 @@ function addLink(parent: Element, label: string, href: string): void {
   parent.append(link);
 }
 
+function conciseStatus(result: string): string {
+  if (!result) return "Not synced";
+  const knownReasons: Record<string, string> = {
+    "visible-window": "Rendered messages only",
+    "history-boundary-unverified": "Older-history boundary unverified",
+    "scope-boundary-unverified": "Requested scope boundary unverified",
+    "message-budget": "Message limit reached",
+    "time-budget": "Time limit reached",
+    "byte-budget": "Export size limit reached",
+    "unverified-history-overlap": "History could not be safely joined",
+    "history-scroll-unavailable": "Older history could not be reached",
+    "unloaded-message": "Some messages were not loaded",
+    "unsupported-message-envelope": "Some messages could not be read",
+    "unverified-between": "A gap remains in the saved history",
+    "stopped": "Stopped",
+  };
+  const partial = /^(.*?\bPartial):\s*(.+)$/u.exec(result);
+  if (partial?.[1] && partial[2]) return `${partial[1]}: ${knownReasons[partial[2]] ?? "Some history could not be verified"}`;
+  return result;
+}
+
 function renderChats(): void {
   chatList.replaceChildren();
-  for (const chat of current?.chats ?? []) {
+  const chats = current?.chats ?? [];
+  chatEmpty.hidden = chats.length > 0;
+  for (const chat of chats) {
     const row = document.createElement("article");
     row.className = "chat-row";
     const title = document.createElement("div");
@@ -180,19 +211,25 @@ function renderChats(): void {
     title.append(checkbox);
     addText(title, "strong", chat.name || "Unnamed chat");
     row.append(title);
-    addText(row, "p", `Account ${chat.accountId} · Chat ${chat.chatId}`, "identity");
-    addText(row, "p", `Result: ${chat.result || "Not synced"}${chat.lastSuccess ? ` · Last success: ${chat.lastSuccess}` : ""}`);
+    addText(row, "p", conciseStatus(chat.result), "chat-status");
     const controls = document.createElement("div");
     controls.className = "chat-controls";
-    addText(row, "p", "Open this chat in WhatsApp Web to sync it.", "identity");
     const candidateExportUrl = chat.exportUrl ?? chat.url;
     if (candidateExportUrl) {
       const safe = safeDriveUrl(candidateExportUrl);
       if (safe) addLink(controls, "Open export", safe);
     }
+    const more = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "More actions";
+    more.append(summary);
+    addText(more, "p", `Account ID: ${chat.accountId}`, "identity");
+    addText(more, "p", `Chat ID: ${chat.chatId}`, "identity");
+    if (chat.lastSuccess) addText(more, "p", `Last success: ${chat.lastSuccess}`, "identity");
+    addText(more, "p", `Result detail: ${chat.result || "Not synced"}`, "identity");
     chat.archives?.forEach((archive, index) => {
       const safe = safeDriveUrl(archive.url);
-      if (safe) addLink(controls, `${archive.deleted ? "Open retained folder" : "Open archived export"} ${index + 1}`, safe);
+      if (safe) addLink(more, `${archive.deleted ? "Open retained folder" : "Open archived export"} ${index + 1}`, safe);
     });
     for (const [label, type] of [["Recover", "recover"], ["Start fresh", "fresh"], ["Delete export", "delete"]] as const) {
       const button = document.createElement("button");
@@ -211,15 +248,17 @@ function renderChats(): void {
           ? { key: chat.key, confirmation: chat.key, expectedAccountId }
           : { key: chat.key, expectedAccountId });
       });
-      controls.append(button);
+      more.append(button);
     }
     row.append(controls);
+    row.append(more);
     chatList.append(row);
   }
 }
 
 function applyState(state: AppState): void {
   if (current?.revision !== undefined && state.revision !== undefined && state.revision < current.revision) return;
+  if (!state.setup || state.drive?.phase === "missing-setup") driveTools.open = true;
   current = state;
   const drive = state.drive;
   if (drive) {
@@ -267,7 +306,7 @@ function refreshState(failureMessage: string): void {
   });
 }
 
-warningNode.textContent = "Edit mode can remove saved content. Text export is alpha; original media may be unavailable unless verified.";
+warningNode.textContent = "Text and captions only; original attachments are not saved yet.";
 configureButton.addEventListener("click", () => {
   const entered = window.prompt("Enter your public Google OAuth client ID. Do not enter a client secret.");
   if (entered === null) return;
@@ -307,8 +346,8 @@ refreshButton.addEventListener("click", () => {
 stopButton.addEventListener("click", () => action("stop"));
 modeSelect.addEventListener("change", () => {
   warningNode.textContent = modeSelect.value === "edit"
-    ? "Edit mode can remove saved content. Text export is alpha; original media may be unavailable unless verified."
-    : "Text export is alpha; original media may be unavailable unless verified.";
+    ? "Edit mode can remove saved content. Text and captions only; original attachments are not saved yet."
+    : "Text and captions only; original attachments are not saved yet.";
 });
 syncButton.addEventListener("click", () => {
   const drive = current?.drive;

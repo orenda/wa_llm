@@ -88,7 +88,11 @@ test("production extension loads without fixture access", async () => {
     await expect(panel.locator("#probe-run")).toBeDisabled();
     await expect(panel.locator("#add-current")).toBeEnabled();
     await expect(panel.locator("#refresh")).toBeEnabled();
+    await panel.locator("#sync-settings > summary").click();
+    await expect(panel.locator("#mode-warning")).toContainText("original attachments are not saved yet");
+    await panel.locator("#mode").selectOption("edit");
     await expect(panel.locator("#mode-warning")).toContainText("Edit mode can remove saved content");
+    await panel.locator("#mode").selectOption("download");
     expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
     const panelReply = await panel.evaluate((protocol) => new Promise<unknown>((resolve) => {
       chrome.runtime.sendMessage({ protocol, type: "panel-ping", requestId: "browser-panel" }, resolve);
