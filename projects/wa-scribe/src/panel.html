@@ -51,18 +51,20 @@
         </div>
       </details>
       <section aria-labelledby="chats-heading">
-        <h2 id="chats-heading">Added chats</h2>
-        <p class="help">Check chats to sync. For this alpha, each checked chat needs to be open in a WhatsApp Web tab.</p>
-        <p id="chat-empty" class="help empty" hidden>No chats added yet. Open a conversation in WhatsApp Web, then add it here.</p>
-        <button id="add-current" class="secondary" type="button" disabled>Add open chat</button>
-        <button id="refresh" type="button">Refresh</button>
+        <h2 id="chats-heading">Chats</h2>
+        <p class="help">Check chats, then Sync. WhatsApp Web must stay signed in. Sync opens checked conversations and can mark messages as read.</p>
+        <input id="chat-filter" type="search" placeholder="Find a chat" aria-label="Find a chat" />
+        <button id="refresh" type="button">Refresh chats</button>
+        <p id="catalog-status" class="help" aria-live="polite"></p>
+        <p id="chat-empty" class="help empty" hidden>No matching chats. Open WhatsApp Web and refresh this list.</p>
         <div id="chat-list" aria-live="polite"></div>
       </section>
       <section aria-labelledby="sync-heading">
         <h2 id="sync-heading">Sync selected chats</h2>
-        <p class="help">Text and captions only; original attachments are not saved yet.</p>
+        <p class="help">Downloads text and available original attachments. Files that cannot be downloaded are marked unavailable.</p>
         <details id="sync-settings">
           <summary>Sync settings</summary>
+          <button id="add-current" class="secondary" type="button" disabled>Add current chat manually</button>
           <label>Mode
             <select id="mode">
               <option value="download">Preserve saved wording</option>

@@ -195,8 +195,18 @@ function draftsFor(ids: readonly string[], chat: ChatExport | null, observed: re
   for (const id of ids) {
     const existing = saved.get(id);
     const next = seen.get(id);
-    if (existing) messages.push({ ...existing, sourceBaseline: next?.sourceBaseline ?? existing.sourceBaseline });
-    else if (next) messages.push({
+    if (existing) {
+      const observedAttachments = new Map((next?.attachments ?? []).map((entry) => [entry.slot, entry.attachment]));
+      const attachments = existing.attachments.map((entry) => {
+        const newer = observedAttachments.get(entry.slot);
+        if ((entry.attachment.state === "pending" || entry.attachment.state === "unavailable") &&
+          newer !== undefined && (newer.state === "saved" || newer.state === "opaque")) {
+          return { slot: entry.slot, attachment: newer };
+        }
+        return entry;
+      });
+      messages.push({ ...existing, attachments, sourceBaseline: next?.sourceBaseline ?? existing.sourceBaseline });
+    } else if (next) messages.push({
       id: next.id, sender: next.sender, timestamp: next.timestamp, sequence: next.sequence, text: next.text,
       attachments: next.attachments, limitation: null, sourceBaseline: next.sourceBaseline, savedWordingBaseline: next.sourceBaseline,
     });

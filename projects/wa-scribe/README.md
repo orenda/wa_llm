@@ -1,55 +1,13 @@
 # wa-scribe
 
-A proposed Chrome extension that exports explicitly selected WhatsApp Web chats to Markdown and original media in Google Drive. Connection starts inside the user's signed-in Chrome browser. Sync runs only on a user action.
+wa-scribe is a Chrome extension alpha that exports selected WhatsApp Web conversations to a Markdown transcript, JSON sidecar, and verified original media in Google Drive. It connects through the user's signed-in Chrome browser and sync starts only after an explicit action.
 
-This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
+**Status: installable 0.1.5 alpha.** The packaged build includes the app's public Google OAuth client ID, so the standard flow is Install → Connect Google Drive → consent. The panel searches a cached chat catalogue and lets you select chats with checkboxes. Sync navigates between selected chats through WhatsApp's normal interface, verifies canonical account/chat IDs, and stops the whole job if the user interacts with WhatsApp during navigation or collection. Opening a chat can mark it read.
 
-**Status: installable 0.1.4 UI alpha.** The panel centers chat checkboxes and Sync, with settings and recovery tools collapsed. It still lists added chats rather than discovering WhatsApp's complete chat list, and selected chats still need open WhatsApp tabs. The owner reported successful chat identification and a saved partial export with `unsupported-message-envelope`; exported content is not yet verified. Original attachments are not saved. [Download/install instructions](docs/INSTALL.md).
+Images, PDFs and other original attachments are saved through WhatsApp's normal Download command only when their bytes match the selected message's stored plaintext file hash. Missing evidence, unsupported controls, grouped media and view-once media remain explicitly unavailable. Unknown message envelopes retain the visible body and record unknown sender/time details with partial coverage.
 
-## Start here
+See [INSTALL.md](docs/INSTALL.md) for installation and the owner's two-chat pilot. [START_HERE.md](START_HERE.md) records the current verification boundary. Format v1 and the attachment-link grammar are in [FORMAT.md](docs/FORMAT.md).
 
-- Install and test the alpha using [INSTALL.md](docs/INSTALL.md); [START_HERE.md](START_HERE.md) records the current delivery and verification boundary.
-- Coding agent: read [AGENTS.md](AGENTS.md), then execute one assignment from [the backlog](docs/BACKLOG.md).
-- Reviewer: use [the review checklist](docs/CODE_REVIEW.md) on the exact submitted commit.
-- Product contract: [spec](docs/SPEC.md), [edge cases](docs/EDGECASES.md), and [test plan](docs/TESTPLAN.md).
-- Delivery sequence: [development plan](docs/DEVELOPMENT.md).
-- Copyable assignment and completion format: [agent handoff](docs/AGENT_HANDOFF.md).
+This is a separate project in the `wa_llm` repository at `projects/wa-scribe/`; it does not use the earlier Python bot's runtime. The project uses TypeScript, a Manifest V3 extension, npm, Vite, Vitest, and Playwright. It does not send WhatsApp messages, run a model, or keep a server-side WhatsApp session.
 
-## Scope
-
-Google Drive is first. Local-folder export follows later. The extension does not send messages, run a model, or require a server logged into WhatsApp. It is independent of the earlier Python bot.
-
-Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite, Vitest, and Playwright. Keep the implementation direct and compact. Avoid application frameworks and generic infrastructure until a concrete task requires them.
-
-## Work and review
-
-The owner requested direct implementation and subsequently authorized typecheck/unit tests for the Recover-only fix. Historical review records remain under `docs/reviews/`; their findings motivated this implementation and are not test evidence for it. Use `codex/wa-scribe-complete` for the integrated source. From the repository root, enter `projects/wa-scribe/` before running project commands.
-
-Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
-
-```text
-cd projects/wa-scribe
-npm ci
-npx playwright install chromium
-npm run typecheck
-npm run test:unit
-npm run test:browser
-npm run build
-```
-
-`npm run build` writes the production unpacked extension to `dist/`. Load that directory from `chrome://extensions` with Developer mode on. `dist-test/` is the test build, which adds the local fixture origin; do not load it as the product. `node scripts/package-release.mjs` zips production files and does not publish. A prebuilt copy is in `install/wa-scribe.zip`; Google OAuth can be configured through the installed panel without Node or rebuilding.
-
-### Evidence
-
-- **This delivery:** `install/BUILD.txt` records the exact source, TypeScript/build results and unrun checks for the ZIP. No tests, CI or live account operations were run for this UI change. [Identity compatibility evidence](docs/reviews/OPAQUE-IDENTITY.md) records the earlier sanitized checks and the resolver's limits.
-- **Available for the owner:** repeat `test:unit` or run the still-unrun `test:browser`. Automatic tests must not call real Google or WhatsApp.
-- **Configured CI:** [`.github/workflows/wa-scribe.yml`](../../.github/workflows/wa-scribe.yml) runs those commands on Node `24.22.0`. A green local run is not a completed remote CI run.
-- **Remaining:** automatic chat discovery/navigation, actual attachment export, unsupported message envelopes and the user pilot. Google app registration belongs to the app owner; a configured package should require users only to click Connect and approve Drive access. See [the intended selection and connection flow](docs/UX.md).
-
-Coding agents implement one small ticket, submit the diff and real test output, and return it to the coordinating agent for review. They do not self-approve, merge, or publish. Each revised commit receives a fresh review. There is no background review service or branch protection configured by these documents.
-
-## Browser checks
-
-Synthetic tests run without Google or WhatsApp credentials. OAuth, actual WhatsApp page behavior, and the final pilot need explicit user actions in the user's Chrome. Drive requires an OAuth client bound to a stable extension ID; Chrome sign-in alone does not grant the Drive permission.
-
-See the parent repository's [LICENSE](../../LICENSE). This project has not been publicly released as an extension.
+Coding agents should read [AGENTS.md](AGENTS.md) and work on one assigned task. Reviewers should use [CODE_REVIEW.md](docs/CODE_REVIEW.md) and the current [backlog](docs/BACKLOG.md). The product contract and edge cases are in [SPEC.md](docs/SPEC.md) and [EDGECASES.md](docs/EDGECASES.md).

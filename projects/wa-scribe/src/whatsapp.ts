@@ -18,7 +18,7 @@ const MESSAGE_ID = /^(true|false)_([^_]+)_([^\s]+)$/;
 const JID = /^\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)$/;
 const ACCOUNT_JID = /^\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net)$/;
 
-function accountId(): string | null {
+export function accountId(): string | null {
   // These two values identify the account. Session/credential storage is never inspected.
   const identities = new Set<string>();
   for (const key of ["last-wid", "last-wid-md"]) {
@@ -169,6 +169,14 @@ function bodyText(node: Node): string {
   return node instanceof HTMLDivElement && node.nextSibling ? `${children}\n` : children;
 }
 
+function messageText(row: HTMLElement): string {
+  const parts = Array.from(row.querySelectorAll<HTMLElement>(".selectable-text"))
+    .filter((node) => !node.parentElement?.closest(".selectable-text") && !node.closest("[data-testid='quoted-message']"));
+  const quote = row.querySelector<HTMLElement>("[data-testid='quoted-message']");
+  const quoted = quote ? bodyText(quote).replace(/\r\n?/g, "\n").split("\n").map((line) => `> ${line}`).join("\n") : "";
+  return [quoted, parts.map(bodyText).join("\n")].filter((part) => part !== "").join("\n\n").replace(/\r\n?/g, "\n");
+}
+
 function attachmentMarkers(row: Element): AttachmentSlot[] {
   const viewOnce = Array.from(row.querySelectorAll("[data-icon*='view-once'], [data-testid*='view-once']")).some((node) => !node.closest("[data-testid='quoted-message']"));
   if (viewOnce) return [{ slot: 1, attachment: { state: "unsupported", detail: "View-once content was not opened." } }];
@@ -198,17 +206,12 @@ async function readWindow(main: HTMLElement, expected: OpenChat, signal?: AbortS
     if (!key || key.chatId !== expected.chatId) throw new Error("A rendered message belongs to another chat.");
     const copyable = (row.matches("[data-pre-plain-text]") ? [row] : Array.from(row.querySelectorAll<HTMLElement>("[data-pre-plain-text]")))
       .find((node) => !node.closest("[data-testid='quoted-message']"));
-    const pre = copyable?.getAttribute("data-pre-plain-text") ?? "";
+    const pre = (copyable?.getAttribute("data-pre-plain-text") ?? "").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim();
     const match = /^\[([^\]]+)\]\s*(.*):\s*$/su.exec(pre);
     const deleted = Array.from(row.querySelectorAll("[data-icon='recalled'], [data-icon='recalled-out'], [data-testid='recalled']")).some((node) => !node.closest("[data-testid='quoted-message']"));
-    const parts = Array.from(row.querySelectorAll<HTMLElement>(".selectable-text"))
-      .filter((node) => !node.parentElement?.closest(".selectable-text") && !node.closest("[data-testid='quoted-message']"));
-    const body = parts.map(bodyText).join("\n");
-    const quote = row.querySelector<HTMLElement>("[data-testid='quoted-message']");
-    const quoted = quote ? bodyText(quote).replace(/\r\n?/g, "\n").split("\n").map((line) => `> ${line}`).join("\n") : "";
-    const text = [quoted, body].filter((part) => part !== "").join("\n\n").replace(/\r\n?/g, "\n");
+    const text = messageText(row);
     const attachments = attachmentMarkers(row);
-    if (!match && !deleted) { limitation = "unsupported-message-envelope"; continue; }
+    if (!match && !deleted) limitation = "unsupported-message-envelope";
     if (!text && !attachments.length && !deleted) { limitation = "unloaded-message"; continue; }
     if (deleted) {
       deletedIds.push(key.id);
@@ -227,11 +230,51 @@ async function readWindow(main: HTMLElement, expected: OpenChat, signal?: AbortS
   return { messages, deletedIds, limitation, binding: rowSignature(main) };
 }
 
+export type CaptureMedia = (row: HTMLElement, message: ObservedMessage, verify: () => Promise<boolean>) => Promise<AttachmentSlot[]>;
+
+async function captureWindowMedia(main: HTMLElement, expected: OpenChat, messages: ObservedMessage[], deleted: readonly string[],
+  capture: CaptureMedia, deadline: number, signal?: AbortSignal): Promise<void> {
+  const context = watchContext(main, true);
+  try {
+    for (const message of messages) {
+      if (Date.now() >= deadline) break;
+      if (!message.attachments.length || deleted.includes(message.id)) continue;
+      const current = await resolveWindow(main, signal);
+      if (!current.ok || !context.current() || current.chat.accountId !== expected.accountId || current.chat.chatId !== expected.chatId) {
+        throw new Error("The source changed before attachment download.");
+      }
+      const row = messageRows(main, current.keys).find((node) => messageKey(node, current.keys)?.id === message.id);
+      if (!row || messageText(row) !== message.text) throw new Error("The attachment's message changed.");
+      const verify = async () => {
+        if (signal?.aborted || !context.current() || messageText(row) !== message.text) return false;
+        const checked = await resolveWindow(main, signal);
+        return !signal?.aborted && context.current() && messageText(row) === message.text && checked.ok &&
+          checked.chat.accountId === expected.accountId && checked.chat.chatId === expected.chatId && messageKey(row, checked.keys)?.id === message.id;
+      };
+      const attachments = await capture(row, message, verify);
+      if (!(await verify())) throw new Error("The source changed during attachment download.");
+      // The source baseline describes the observed DOM, independently of destination file paths.
+      message.attachments = attachments;
+    }
+  } finally { context.close(); }
+}
+
 /** Join only when observed windows give one unambiguous ordering. */
 function joinWindows(saved: ObservedMessage[], observed: ObservedMessage[]): ObservedMessage[] | null {
   if (!saved.length) return observed;
   const existing = new Set(saved.map((message) => message.id));
   if (!observed.some((message) => existing.has(message.id))) return null;
+  const previous = new Map(saved.map((message) => [message.id, message]));
+  for (const message of observed) {
+    const prior = previous.get(message.id);
+    if (!prior || prior.sourceBaseline !== message.sourceBaseline) continue;
+    // A repeated DOM window must not erase originals already staged in this pass.
+    message.attachments = message.attachments.map((entry) => {
+      const kept = prior.attachments.find((item) => item.slot === entry.slot);
+      return (entry.attachment.state === "pending" || entry.attachment.state === "unavailable") && kept &&
+        (kept.attachment.state === "saved" || kept.attachment.state === "opaque") ? kept : entry;
+    });
+  }
   const values = new Map([...saved, ...observed].map((message) => [message.id, message]));
   const edges = new Map([...values.keys()].map((id) => [id, new Set<string>()]));
   const degree = new Map([...values.keys()].map((id) => [id, 0]));
@@ -276,6 +319,7 @@ export async function collectWhatsApp(input: {
   scope: "visible" | "loaded";
   signal?: AbortSignal;
   onProgress?: (count: number) => void;
+  captureMedia?: CaptureMedia;
 }): Promise<CollectedChat> {
   const main = document.querySelector<HTMLElement>("#main");
   if (!main) throw new Error("Open the selected WhatsApp conversation first.");
@@ -299,6 +343,7 @@ export async function collectWhatsApp(input: {
       const observed = cutoff >= 0 ? window.messages.slice(0, cutoff + 1) : window.messages;
       const merged = joinWindows(messages, observed);
       if (!merged) { stopReason = "unverified-history-overlap"; contiguous = false; break; }
+      if (input.captureMedia) await captureWindowMedia(main, input.expected, observed.slice(-limit), window.deletedIds, input.captureMedia, deadline, input.signal);
       idle = merged.length === messages.length ? idle + 1 : 0;
       messages = merged;
       let bytes = 0;
@@ -323,7 +368,7 @@ export async function collectWhatsApp(input: {
       await wait(450, input.signal);
     }
   } finally {
-    if (scroller && originalTop !== undefined && context.current() && rowSignature(main) === verifiedRows) scroller.scrollTop = originalTop;
+    if (!input.signal?.aborted && scroller && originalTop !== undefined && context.current() && rowSignature(main) === verifiedRows) scroller.scrollTop = originalTop;
     context.close();
   }
   const kept = new Set(messages.map((message) => message.id));

@@ -4,6 +4,7 @@ import { decodeMetadata } from "../src/format";
 import type { HttpRequest, HttpResult } from "../src/drive";
 
 const boundary = vi.hoisted(() => ({ http: vi.fn<(request: HttpRequest) => Promise<HttpResult>>() }));
+const stagedMedia = vi.hoisted(() => ({ prune: vi.fn<(keep: ReadonlySet<string>) => Promise<void>>() }));
 vi.mock("../src/chrome-drive", () => ({
   chromeHttp: boundary.http,
   identityToken: async () => ({ ok: true, token: "synthetic-token" }),
@@ -13,9 +14,14 @@ vi.mock("../src/chrome-drive", () => ({
     warning: null, httpStatus: null, pendingId: null,
   }),
 }));
+vi.mock("../src/media-stage", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/media-stage")>(),
+  pruneStagedMedia: stagedMedia.prune,
+}));
 
 const PROTOCOL = "wa-scribe.app";
 const EXTENSION_ID = "synthetic-extension";
+const WHATSAPP_ACCOUNT = "15551234567@c.us";
 const FOLDER = "application/vnd.google-apps.folder";
 const current = { folderId: "old-generation", markdownId: "old-markdown", metadataId: "old-metadata" };
 const binding = { accountId: "wa-1", chatId: "chat-1", destinationId: "google-1:chat-root", generation: "generation-1" };
@@ -33,10 +39,10 @@ function chat(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function seed(overrides: Record<string, unknown> = {}) {
+function seed(overrides: Record<string, unknown> = {}, savedChats: ReturnType<typeof chat>[] = [chat(overrides)]) {
   return {
     schema: 1, roots: [{ accountId: "google-1", id: "desk-root", operationId: "root-operation", ready: true }],
-    chats: [chat(overrides)], job: null,
+    chats: savedChats, job: null,
   };
 }
 
@@ -44,8 +50,10 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function harness(initial: unknown, stopReason = "visible-window", loseCreate = false) {
+function harness(initial: unknown, stopReason = "visible-window", loseCreate = false,
+  catalogEntries: { chatId: string; name: string; aliases: string[] }[] = []) {
   let disk: unknown = structuredClone(initial);
+  let collectStarts = 0;
   const files = new Map<string, { meta: Record<string, unknown>; body: string }>();
   const owned = (id: string, parent: string | null, operation: string, mimeType = FOLDER) => ({
     id, parents: parent ? [parent] : [], mimeType, trashed: false,
@@ -58,6 +66,7 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
   files.set(current.metadataId, { meta: owned(current.metadataId, current.folderId, current.folderId, "application/json"), body: "old sidecar" });
   const response = (value: unknown, status = 200): HttpResult => ({ kind: "response", status, bytes: new TextEncoder().encode(JSON.stringify(value)) });
   boundary.http.mockReset();
+  stagedMedia.prune.mockResolvedValue(undefined);
   boundary.http.mockImplementation(async (request) => {
     const url = new URL(request.url);
     if (url.pathname.endsWith("/about")) return response({ user: { permissionId: "google-1", emailAddress: "owner@example.test" } });
@@ -104,7 +113,11 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
     } },
     tabs: {
       query: async () => [{ id: 1, url: "https://web.whatsapp.com/" }],
-      sendMessage: async () => ({ ok: true, chat: { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" } }),
+      sendMessage: async (_tabId: number, message: { type?: string }) => {
+        if (message.type === "account") return { ok: true, accountId: binding.accountId };
+        if (message.type === "catalog") return { ok: true, scope: "local-cache", accountId: WHATSAPP_ACCOUNT, chats: catalogEntries };
+        return { ok: true, chat: { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" } };
+      },
       connect: () => {
         let receive: (value: unknown) => void = () => undefined;
         let disconnected: () => void = () => undefined;
@@ -112,15 +125,18 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
           onMessage: { addListener: (listener: typeof receive) => { receive = listener; } },
           onDisconnect: { addListener: (listener: typeof disconnected) => { disconnected = listener; } },
           disconnect: () => disconnected(),
-          postMessage: () => queueMicrotask(() => receive({ type: "result", value: {
+          postMessage: (message: { type?: string }) => {
+            if (message.type === "collect") collectStarts += 1;
+            queueMicrotask(() => receive({ type: "result", value: {
             chat: { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" }, messages: observed,
             order: "verified", contiguous: true, stopReason, deletedIds: [],
-          } })),
+          } }));
+          },
         };
       },
     },
   });
-  return { read: () => structuredClone(disk), files, allowCreates: () => { loseCreate = false; } };
+  return { read: () => structuredClone(disk), files, allowCreates: () => { loseCreate = false; }, get collectStarts() { return collectStarts; } };
 }
 
 async function worker() {
@@ -251,11 +267,43 @@ describe("review regressions on the installed export path", () => {
     transcript.body = transcript.body.replace("text m1", "edit m1");
     const edited = transcript.body;
     const writes = boundary.http.mock.calls.filter(([request]) => request.method !== "GET").length;
+    const collectionStarts = store.collectStarts;
     const paused = await sync(service);
     expect(paused.state.chats[0]?.result).toContain("local-edit");
     expect(paused.state.chats[0]?.result).toContain("m1");
     expect(transcript.body).toBe(edited);
     expect(boundary.http.mock.calls.filter(([request]) => request.method !== "GET")).toHaveLength(writes);
+    expect(store.collectStarts).toBe(collectionStarts);
+  });
+
+  it("discovers chats without selecting them and persists only the chat the user selects", async () => {
+    const catalogEntries = [
+      { chatId: "15551230000@c.us", name: "Alice", aliases: [] },
+      { chatId: "120363000000000000@g.us", name: "Project group", aliases: ["Ops"] },
+    ];
+    const store = harness(seed({}, []), "visible-window", false, catalogEntries);
+    const service = await worker();
+
+    const discovered = await service.handleApp({ protocol: PROTOCOL, type: "discover" });
+    expect(discovered.ok).toBe(true);
+    expect(discovered.state.chats).toMatchObject(catalogEntries.map((entry) => ({
+      accountId: WHATSAPP_ACCOUNT, chatId: entry.chatId, name: entry.name, selected: false, registered: false,
+    })));
+    expect(store.read()).toMatchObject({ chats: [] });
+
+    const chosen = discovered.state.chats.find((entry) => entry.chatId === catalogEntries[1]?.chatId);
+    if (!chosen) throw new Error("The discovered group is missing.");
+    const selected = await service.handleApp({ protocol: PROTOCOL, type: "select", key: chosen.key, selected: true });
+    expect(selected.ok).toBe(true);
+    expect(selected.state.chats.find((entry) => entry.key === chosen.key)).toMatchObject({ selected: true, registered: true });
+    expect(selected.state.chats.find((entry) => entry.chatId === catalogEntries[0]?.chatId)).toMatchObject({ selected: false, registered: false });
+
+    const persisted: unknown = store.read();
+    if (!record(persisted) || !Array.isArray(persisted.chats)) throw new Error("Selected chat state was not persisted.");
+    expect(persisted.chats).toHaveLength(1);
+    expect(persisted.chats[0]).toMatchObject({ chatId: catalogEntries[1]?.chatId, selected: true });
+    const restored = await (await worker()).handleApp({ protocol: PROTOCOL, type: "state" });
+    expect(restored.state.chats).toMatchObject([{ chatId: catalogEntries[1]?.chatId, selected: true, registered: true }]);
   });
 });
 

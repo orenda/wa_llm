@@ -18,6 +18,7 @@ type ChatState = {
   url: string | null;
   exportUrl?: string | null;
   archives?: { url: string; accountId: string; generation: string; deleted?: boolean }[];
+  registered?: boolean;
 };
 
 type AppState = {
@@ -26,10 +27,12 @@ type AppState = {
   chats: ChatState[];
   job: { phase: string; chatKey: string | null; count: number; reason: string | null } | null;
   setup: boolean;
+  catalogScope?: string | null;
+  catalogError?: string | null;
 };
 
 type AppReply = { ok: boolean; error?: string; state?: AppState };
-type Action = "state" | "connect" | "probe" | "add-current" | "select" | "sync" | "stop" | "recover" | "fresh" | "delete";
+type Action = "state" | "discover" | "connect" | "probe" | "add-current" | "select" | "sync" | "stop" | "recover" | "fresh" | "delete";
 type Request = { protocol: typeof APP_PROTOCOL; type: Action; [key: string]: unknown };
 
 const byId = <T extends HTMLElement>(id: string, kind: { new(): T }): T => {
@@ -46,6 +49,8 @@ const driveConnect = byId("drive-connect", HTMLDivElement);
 const driveTools = byId("drive-tools", HTMLDetailsElement);
 const chatList = byId("chat-list", HTMLDivElement);
 const chatEmpty = byId("chat-empty", HTMLParagraphElement);
+const chatFilter = byId("chat-filter", HTMLInputElement);
+const catalogNode = byId("catalog-status", HTMLParagraphElement);
 const jobNode = byId("job-status", HTMLParagraphElement);
 const errorNode = byId("action-error", HTMLParagraphElement);
 const limitInput = byId("history-limit", HTMLInputElement);
@@ -64,6 +69,7 @@ let current: AppState | null = null;
 let pollTimer: number | undefined;
 let stateRequestInFlight = false;
 let actionBusy = false;
+let discovered = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -73,6 +79,7 @@ function isChat(value: unknown): value is ChatState {
   if (!isRecord(value)) return false;
   return typeof value.key === "string" && typeof value.accountId === "string" && typeof value.chatId === "string" &&
     typeof value.name === "string" && typeof value.selected === "boolean" && typeof value.result === "string" &&
+    (value.registered === undefined || typeof value.registered === "boolean") &&
     (value.lastSuccess === null || typeof value.lastSuccess === "string") &&
     (value.url === null || (typeof value.url === "string" && safeDriveUrl(value.url) !== null)) &&
     (value.exportUrl === undefined || value.exportUrl === null || (typeof value.exportUrl === "string" && safeDriveUrl(value.exportUrl) !== null)) &&
@@ -97,7 +104,9 @@ function isAppState(value: unknown): value is AppState {
     (job.chatKey === null || typeof job.chatKey === "string") && typeof job.count === "number" && Number.isInteger(job.count) &&
     (job.reason === null || typeof job.reason === "string"));
   return (value.revision === undefined || (typeof value.revision === "number" && Number.isSafeInteger(value.revision) && value.revision >= 0)) &&
-    (value.drive === null || isDriveResult(value.drive)) && value.chats.every(isChat) && validJob && typeof value.setup === "boolean";
+    (value.drive === null || isDriveResult(value.drive)) && value.chats.every(isChat) && validJob && typeof value.setup === "boolean" &&
+    (value.catalogScope === undefined || value.catalogScope === null || value.catalogScope === "local-cache") &&
+    (value.catalogError === undefined || value.catalogError === null || typeof value.catalogError === "string");
 }
 
 function isAppReply(value: unknown): value is AppReply {
@@ -147,7 +156,7 @@ function updateControls(): void {
   probeButton.disabled = actionBusy || running || !accountId || drive?.phase === "missing-setup";
   addButton.disabled = actionBusy || running || current === null;
   configureButton.disabled = actionBusy || running;
-  refreshButton.disabled = false;
+  refreshButton.disabled = actionBusy;
   stopButton.disabled = !running;
   const selected = current?.chats.some((chat) => chat.selected) ?? false;
   syncButton.disabled = actionBusy || !accountId || !selected || running;
@@ -189,13 +198,19 @@ function conciseStatus(result: string): string {
     "stopped": "Stopped",
   };
   const partial = /^(.*?\bPartial):\s*(.+)$/u.exec(result);
-  if (partial?.[1] && partial[2]) return `${partial[1]}: ${knownReasons[partial[2]] ?? "Some history could not be verified"}`;
+  if (partial?.[1] && partial[2]) {
+    const [reason = "", ...details] = partial[2].split("; ");
+    return `${partial[1]}: ${knownReasons[reason] ?? "Some history could not be verified"}${details.length ? `; ${details.join("; ")}` : ""}`;
+  }
   return result;
 }
 
 function renderChats(): void {
   chatList.replaceChildren();
-  const chats = current?.chats ?? [];
+  const all = current?.chats ?? [], query = chatFilter.value.trim().toLocaleLowerCase();
+  const matching = all.filter((chat) => !query || `${chat.name} ${chat.chatId}`.toLocaleLowerCase().includes(query));
+  const chats = matching.slice(0, 200);
+  catalogNode.textContent = current?.catalogError || `${all.length} chats${current?.catalogScope === "local-cache" ? " in this browser's cache" : ""}${matching.length > 200 ? "; showing the first 200 matches—use Find a chat" : ""}`;
   chatEmpty.hidden = chats.length > 0;
   for (const chat of chats) {
     const row = document.createElement("article");
@@ -231,14 +246,14 @@ function renderChats(): void {
       const safe = safeDriveUrl(archive.url);
       if (safe) addLink(more, `${archive.deleted ? "Open retained folder" : "Open archived export"} ${index + 1}`, safe);
     });
-    for (const [label, type] of [["Recover", "recover"], ["Start fresh", "fresh"], ["Delete export", "delete"]] as const) {
+    for (const [label, type] of (chat.registered === false ? [] : [["Recover", "recover"], ["Start fresh", "fresh"], ["Delete export", "delete"]] as const)) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = label;
       button.disabled = actionBusy || (current?.job != null);
       button.addEventListener("click", () => {
         if (type === "fresh" && !window.confirm("Start a fresh export tree for this chat? The old tree will be preserved.")) return;
-        if (type === "delete" && !window.confirm("Trash only this export's recorded transcript.md and sync.json files? Export folders, untracked media, and earlier archived exports will be kept.")) return;
+        if (type === "delete" && !window.confirm("Trash this export's recorded transcript, metadata and attachment files? Export folders and untracked files will be kept.")) return;
         const expectedAccountId = current?.drive?.account?.permissionId;
         if (!expectedAccountId) {
           setError("Connect Google Drive and confirm the account before changing this export.");
@@ -302,11 +317,12 @@ function refreshState(failureMessage: string): void {
     stateRequestInFlight = false;
     if (reply?.state) applyState(reply.state);
     else if (!reply) setError(failureMessage);
+    if (!discovered && reply?.state && !reply.state.job) { discovered = true; action("discover"); }
     if (current?.job) schedulePoll();
   });
 }
 
-warningNode.textContent = "Text and captions only; original attachments are not saved yet.";
+warningNode.textContent = "Media limits: 8 MiB per file, 32 MiB and 128 files per export generation. View-once media are not opened.";
 configureButton.addEventListener("click", () => {
   const entered = window.prompt("Enter your public Google OAuth client ID. Do not enter a client secret.");
   if (entered === null) return;
@@ -341,13 +357,15 @@ addButton.addEventListener("click", () => action("add-current"));
 refreshButton.addEventListener("click", () => {
   if (pollTimer !== undefined) window.clearTimeout(pollTimer);
   pollTimer = undefined;
-  refreshState("The extension could not refresh panel state.");
+  if (current?.job) refreshState("The extension could not refresh panel state.");
+  else action("discover");
 });
+chatFilter.addEventListener("input", renderChats);
 stopButton.addEventListener("click", () => action("stop"));
 modeSelect.addEventListener("change", () => {
   warningNode.textContent = modeSelect.value === "edit"
-    ? "Edit mode can remove saved content. Text and captions only; original attachments are not saved yet."
-    : "Text and captions only; original attachments are not saved yet.";
+    ? "Edit mode can remove saved content. Media limits: 8 MiB per file, 32 MiB and 128 files per export generation."
+    : "Media limits: 8 MiB per file, 32 MiB and 128 files per export generation. View-once media are not opened.";
 });
 syncButton.addEventListener("click", () => {
   const drive = current?.drive;

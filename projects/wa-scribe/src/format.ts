@@ -151,7 +151,7 @@ function attachmentOk(attachment: Attachment): boolean {
   if (attachment.state === "pending" || attachment.state === "unavailable")
     return attachment.limitation.length > 0 && !attachment.limitation.includes("://");
   if (attachment.state === "unsupported") return attachment.detail.length > 0 && !attachment.detail.includes("://");
-  if (!isPlainName(attachment.name) || !isSafeRelative(attachment.relativePath)) return false;
+  if (!isPlainName(attachment.name) || !isSafeRelative(attachment.relativePath) || encodedRelativePath(attachment.relativePath) === null) return false;
   if (attachment.state === "opaque") return attachment.mediaType === null || isMediaType(attachment.mediaType);
   return isMediaType(attachment.mediaType);
 }
@@ -159,13 +159,32 @@ function attachmentOk(attachment: Attachment): boolean {
 function canonicalAttachment(attachment: Attachment): Attachment {
   if (attachment.state === "pending" || attachment.state === "unavailable") return { state: attachment.state, limitation: attachment.limitation };
   if (attachment.state === "unsupported") return { state: "unsupported", detail: attachment.detail };
-  if (attachment.state === "opaque")
-    return { state: "opaque", name: attachment.name, mediaType: attachment.mediaType, relativePath: attachment.relativePath };
+  if (attachment.state === "opaque") return { state: "opaque", name: attachment.name, mediaType: attachment.mediaType, relativePath: attachment.relativePath };
   return { state: "saved", name: attachment.name, mediaType: attachment.mediaType, relativePath: attachment.relativePath };
 }
 
 function attachmentJson(attachment: Attachment): string {
   return JSON.stringify(canonicalAttachment(attachment));
+}
+
+function encodePathSegment(segment: string): string {
+  return encodeURIComponent(segment).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function encodedRelativePath(path: string): string | null {
+  try {
+    return path.split("/").map(encodePathSegment).join("/");
+  } catch {
+    return null;
+  }
+}
+
+function attachmentLinkLine(entry: AttachmentSlot): string | null {
+  const attachment = entry.attachment;
+  if (attachment.state !== "saved" && attachment.state !== "opaque") return null;
+  const path = encodedRelativePath(attachment.relativePath);
+  if (path === null) return null;
+  return `attachment-link-${entry.slot}: [Open attachment](./${path})`;
 }
 
 function canonicalAttachments<T extends MessageDraft>(message: T): T {
@@ -234,7 +253,11 @@ function renderBlock(message: MessageDraft): string | null {
   if (message.timestamp.instant !== null) lines.push(`instant: ${escapeHeader(message.timestamp.instant)}`);
   lines.push(`sequence: ${message.sequence}`);
   if (message.limitation !== null) lines.push(`limitation: ${escapeHeader(message.limitation)}`);
-  for (const entry of message.attachments) lines.push(`attachment: ${entry.slot} ${attachmentJson(entry.attachment)}`);
+  for (const entry of message.attachments) {
+    lines.push(`attachment: ${entry.slot} ${attachmentJson(entry.attachment)}`);
+    const link = attachmentLinkLine(entry);
+    if (link !== null) lines.push(link);
+  }
   lines.push("");
   if (message.text !== "") {
     for (const line of message.text.split("\n")) lines.push(escapeBodyLine(line));
@@ -323,6 +346,10 @@ function readAttachment(line: string): AttachmentSlot | null {
   }
 }
 
+function validAttachmentLink(line: string, entry: AttachmentSlot): boolean {
+  return line === attachmentLinkLine(entry);
+}
+
 function timestampFrom(fields: Map<string, string>): Timestamp | null {
   const display = fields.get("time-display");
   const precision = fields.get("time-precision");
@@ -359,12 +386,20 @@ function readBlock(lines: readonly string[], start: number): { block: ParsedBloc
   }
   const attachments: AttachmentSlot[] = [];
   const seen = new Set<number>();
+  const validatedLinkIndices = new Set<number>();
   while (lines[index] !== undefined && lines[index] !== "") {
     const entry = readAttachment(lines[index] ?? "");
     if (entry === null || seen.has(entry.slot)) return null;
     seen.add(entry.slot);
     attachments.push(entry);
     index += 1;
+    const linkLine = lines[index];
+    const expectedLink = attachmentLinkLine(entry);
+    if (linkLine?.startsWith("attachment-link-")) {
+      if (expectedLink === null || !validAttachmentLink(linkLine, entry)) return null;
+      validatedLinkIndices.add(index);
+      index += 1;
+    }
   }
   if (lines[index] !== "") return null;
   index += 1;
@@ -383,7 +418,7 @@ function readBlock(lines: readonly string[], start: number): { block: ParsedBloc
     body.push(unescaped);
     index += 1;
   }
-  const blockText = `${lines.slice(start, index).join("\n")}\n`;
+  const blockText = `${lines.slice(start, index).filter((_, lineIndex) => !validatedLinkIndices.has(start + lineIndex)).join("\n")}\n`;
   const block: ParsedBlock = {
     sender: { key: senderKey, name },
     timestamp,

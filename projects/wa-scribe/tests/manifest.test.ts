@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { DRIVE_FILE_SCOPE } from "../src/public-config";
+import { DEFAULT_OAUTH_CLIENT_ID, DRIVE_FILE_SCOPE, publicOAuth } from "../src/public-config";
 import { FIXTURE_MATCH, createManifest } from "../src/manifest";
 
 const clientId = "1234567890-abc.apps.googleusercontent.com";
 const extensionKey = "B".repeat(120);
+
+describe("publicOAuth", () => {
+  it("uses the preconfigured public client ID unless an explicit value overrides or clears it", () => {
+    expect(publicOAuth({}).clientId).toBe(DEFAULT_OAUTH_CLIENT_ID);
+    expect(publicOAuth({ WA_SCRIBE_OAUTH_CLIENT_ID: clientId }).clientId).toBe(clientId);
+    expect(publicOAuth({ WA_SCRIBE_OAUTH_CLIENT_ID: "" }).clientId).toBe("");
+  });
+});
 
 describe("createManifest", () => {
   it("grants production only WhatsApp and scoped Google API access", () => {
@@ -12,6 +20,7 @@ describe("createManifest", () => {
     expect(manifest.permissions).toEqual(["sidePanel", "identity", "storage", "tabs"]);
     expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*"]);
     expect(manifest.content_scripts).toEqual([
+      { matches: ["https://web.whatsapp.com/*"], js: ["media-bridge.js"], run_at: "document_start", world: "MAIN" },
       { matches: ["https://web.whatsapp.com/*"], js: ["content.js"], run_at: "document_idle" },
     ]);
     expect(text).not.toContain("127.0.0.1");
@@ -26,6 +35,7 @@ describe("createManifest", () => {
     expect(manifest.permissions).toEqual(["sidePanel", "identity", "storage", "tabs"]);
     expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*", FIXTURE_MATCH]);
     expect(manifest.content_scripts).toEqual([
+      { matches: ["https://web.whatsapp.com/*"], js: ["media-bridge.js"], run_at: "document_start", world: "MAIN" },
       { matches: ["https://web.whatsapp.com/*", FIXTURE_MATCH], js: ["content.js"], run_at: "document_idle" },
     ]);
   });

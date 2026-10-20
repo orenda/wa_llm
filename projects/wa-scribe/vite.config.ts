@@ -4,12 +4,12 @@ import { defineConfig, type UserConfig } from "vite";
 import { createManifest, type ExtensionTarget } from "./src/manifest.ts";
 import { publicOAuth } from "./src/public-config.ts";
 
-type Entry = "background" | "content" | "panel";
+type Entry = "background" | "content" | "media-bridge" | "panel";
 
 function readEntry(): Entry {
   const value = process.env.WA_ENTRY;
-  if (value === "background" || value === "content" || value === "panel") return value;
-  throw new Error("Set WA_ENTRY to background, content, or panel. Use npm run build.");
+  if (value === "background" || value === "content" || value === "media-bridge" || value === "panel") return value;
+  throw new Error("Set WA_ENTRY to background, content, media-bridge, or panel. Use npm run build.");
 }
 
 const bakedClientId = JSON.stringify(process.env.WA_SCRIBE_OAUTH_CLIENT_ID ?? "");

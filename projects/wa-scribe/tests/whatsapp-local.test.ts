@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { collectWhatsApp, inspectWhatsAppResolved } from "../src/whatsapp";
 import { resolveLocalMessageKeys, type LocalMessageKey, type LocalIdentityResult } from "../src/local-identity";
+import type { AttachmentSlot } from "../src/model";
 
 vi.mock("../src/local-identity", () => ({ resolveLocalMessageKeys: vi.fn() }));
 
@@ -18,7 +19,7 @@ function envelope(value: string, owner: object, quoted = false) {
   };
 }
 
-function keyedRow(id: string, options: { envelope?: string; nestedEnvelopes?: string[]; quote?: boolean; text?: string; scrollParent?: object } = {}) {
+function keyedRow(id: string, options: { envelope?: string; nestedEnvelopes?: string[]; quote?: boolean; text?: string; scrollParent?: object; attachment?: boolean } = {}) {
   const quote = options.quote ? {
     nodeType: 1,
     childNodes: [{ nodeType: 3, textContent: "Quoted foreign message" }],
@@ -30,6 +31,7 @@ function keyedRow(id: string, options: { envelope?: string; nestedEnvelopes?: st
     nextSibling: null,
     closest: () => null,
   } : null;
+  const media = { closest: () => null, contains: () => false };
   const row = {
     parentElement: options.scrollParent,
     getAttribute: (name: string) => name === "data-id" ? id : name === "data-pre-plain-text" ? options.envelope ?? null : null,
@@ -37,7 +39,8 @@ function keyedRow(id: string, options: { envelope?: string; nestedEnvelopes?: st
       selector === "[data-testid='quoted-message']" && options.quote ? {} : null,
     querySelector: (selector: string) => selector === "[data-testid='quoted-message']" ? quote : null,
     querySelectorAll: (selector: string) => selector === ".selectable-text" && text ? [text] :
-      selector === "[data-pre-plain-text]" ? (options.nestedEnvelopes ?? []).map((value, index) => envelope(value, row, index === 0)) : [],
+      selector === "[data-pre-plain-text]" ? (options.nestedEnvelopes ?? []).map((value, index) => envelope(value, row, index === 0)) :
+      selector === "img:not(.emoji), video, audio, [data-testid='document-thumb'], [data-icon*='document']" && options.attachment ? [media] : [],
     matches: (selector: string) => selector === "[data-pre-plain-text]" && Boolean(options.envelope),
   };
   return row;
@@ -68,21 +71,24 @@ class FakeMutationObserver implements MutationObserver {
 
 let lastObserver: FakeMutationObserver | null = null;
 
-function makeMain(rows: ReturnType<typeof keyedRow>[]) {
+function makeMain(rows: ReturnType<typeof keyedRow>[], onDataRowsRead: () => void = () => undefined) {
   let currentRows = rows;
   const main = {
-    querySelectorAll: (selector: string) => selector === "[data-id]" ? currentRows :
+    querySelectorAll: (selector: string) => {
+      if (selector === "[data-id]") onDataRowsRead();
+      return selector === "[data-id]" ? currentRows :
       selector === "[data-pre-plain-text]" ? currentRows.flatMap<object>((row) => row.matches("[data-pre-plain-text]") ? [row] : row.querySelectorAll("[data-pre-plain-text]")) :
       selector === ".message-in, .message-out" ? [] :
-      selector === ".message-in, .message-out, [data-pre-plain-text]" ? currentRows.flatMap<object>((row) => row.matches("[data-pre-plain-text]") ? [row] : row.querySelectorAll("[data-pre-plain-text]")) : [],
+      selector === ".message-in, .message-out, [data-pre-plain-text]" ? currentRows.flatMap<object>((row) => row.matches("[data-pre-plain-text]") ? [row] : row.querySelectorAll("[data-pre-plain-text]")) : [];
+    },
     querySelector: () => null,
     contains: () => true,
   };
   return { main, setRows: (next: ReturnType<typeof keyedRow>[]) => { currentRows = next; } };
 }
 
-function installPage(rows: ReturnType<typeof keyedRow>[], account = ACCOUNT): Context {
-  let { main, setRows } = makeMain(rows);
+function installPage(rows: ReturnType<typeof keyedRow>[], account = ACCOUNT, onDataRowsRead: () => void = () => undefined): Context {
+  let { main, setRows } = makeMain(rows, onDataRowsRead);
   let currentAccount = account;
   let selection: object[] = [];
   const sidebar = {};
@@ -103,11 +109,11 @@ function installPage(rows: ReturnType<typeof keyedRow>[], account = ACCOUNT): Co
   };
 }
 
-function makeScroller() {
+function makeScroller(afterScroll?: () => void) {
   let top = 200, writes = 0;
   const scroller = {
     get scrollTop() { return top; },
-    set scrollTop(value: number) { top = value; writes += 1; },
+    set scrollTop(value: number) { top = value; writes += 1; afterScroll?.(); },
     clientHeight: 100,
     scrollHeight: 500,
   };
@@ -126,6 +132,7 @@ function key(raw: string, chatId: string): LocalMessageKey {
 
 afterEach(() => {
   lastObserver = null;
+  vi.restoreAllMocks();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
@@ -230,6 +237,39 @@ describe("WhatsApp collection with local identities", () => {
     expect(result.messages[0]?.timestamp.display).toBe("10:15, 2/3/2026");
   });
 
+  it("retains identified body text without an envelope and leaves its timestamp unknown", async () => {
+    const canonicalId = `false_${CHAT}_missing-envelope`;
+    installPage([keyedRow(canonicalId, { text: "Body remains available." })]);
+    vi.stubGlobal("Node", class { static readonly TEXT_NODE = 3; });
+    vi.stubGlobal("HTMLBRElement", class {});
+    vi.stubGlobal("HTMLImageElement", class {});
+    vi.stubGlobal("HTMLDivElement", class {});
+
+    const result = await collectWhatsApp({ expected: { accountId: ACCOUNT, chatId: CHAT, name: "Group" }, limit: 10, maxMs: 1_000, scope: "visible" });
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.id).toBe(canonicalId);
+    expect(result.messages[0]?.text).toBe("Body remains available.");
+    expect(result.messages[0]?.timestamp).toEqual({ display: "", precision: "unknown", timeZone: null, instant: null });
+    expect(result.stopReason).toBe("unsupported-message-envelope");
+    expect(result.contiguous).toBe(false);
+  });
+
+  it("strips bidi marks from a valid message prefix before reading sender and display time", async () => {
+    const canonicalId = `false_${CHAT}_bidi-envelope`;
+    installPage([keyedRow(canonicalId, { envelope: "\u200e[10:15, 2/3/2026] \u200eReal Sender:\u200f", text: "Bidi prefix body." })]);
+    vi.stubGlobal("Node", class { static readonly TEXT_NODE = 3; });
+    vi.stubGlobal("HTMLBRElement", class {});
+    vi.stubGlobal("HTMLImageElement", class {});
+    vi.stubGlobal("HTMLDivElement", class {});
+
+    const result = await collectWhatsApp({ expected: { accountId: ACCOUNT, chatId: CHAT, name: "Group" }, limit: 10, maxMs: 1_000, scope: "visible" });
+
+    expect(result.messages[0]?.sender.name).toBe("Real Sender");
+    expect(result.messages[0]?.timestamp).toEqual({ display: "10:15, 2/3/2026", precision: "display-only", timeZone: null, instant: null });
+    expect(result.messages[0]?.text).toBe("Bidi prefix body.");
+  });
+
   it("keeps the resolved canonical ID when collecting opaque message rows", async () => {
     const page = installPage([keyedRow(OPAQUE, { envelope: "[10:15, 2/3/2026] Alice:", text: "opaque body" })]);
     vi.mocked(resolveLocalMessageKeys).mockResolvedValue({ ok: true, keys: new Map([[OPAQUE, key(OPAQUE, CHAT)]]) });
@@ -280,5 +320,75 @@ describe("WhatsApp collection with local identities", () => {
     await expect(collectWhatsApp({ expected: { accountId: ACCOUNT, chatId: CHAT, name: "Group" }, limit: 10, maxMs: 1_000, scope: "visible" })).rejects.toThrow();
 
     expect(scroll.writes()).toBe(0);
+  });
+
+  it("does not move the user's scroll position after Stop interrupts collection", async () => {
+    const scroll = makeScroller();
+    installPage([keyedRow(`false_${CHAT}_stopped`, { envelope: "[10:15, 2/3/2026] Alice:", text: "body", scrollParent: scroll.scroller })]);
+    vi.stubGlobal("getComputedStyle", () => ({ overflowY: "auto" }));
+    vi.stubGlobal("Node", class { static readonly TEXT_NODE = 3; });
+    vi.stubGlobal("HTMLBRElement", class {});
+    vi.stubGlobal("HTMLImageElement", class {});
+    vi.stubGlobal("HTMLDivElement", class {});
+    const controller = new AbortController();
+
+    await collectWhatsApp({ expected: { accountId: ACCOUNT, chatId: CHAT, name: "Group" }, limit: 10,
+      maxMs: 1_000, scope: "visible", signal: controller.signal, onProgress: () => controller.abort() });
+
+    expect(scroll.writes()).toBe(0);
+  });
+
+  it.each([
+    { label: "same source baseline", text: "shared body", retained: true },
+    { label: "changed source baseline", text: "edited body", retained: false },
+  ])("keeps media from the first history window across an overlapping $label window at the time budget", async ({ text, retained }) => {
+    let now = 0;
+    let expireAtNextRowsRead = false;
+    let swapped = false;
+    let overlapRead = false;
+    let captures = 0;
+    const scroll = makeScroller(() => { now = 999; });
+    const page = installPage([
+      keyedRow(`false_${CHAT}_overlap-media`, { envelope: "[10:15, 2/3/2026] Alice:", text: "shared body", scrollParent: scroll.scroller, attachment: true }),
+    ], ACCOUNT, () => {
+      if (expireAtNextRowsRead) { now = 1_000; expireAtNextRowsRead = false; overlapRead = true; }
+    });
+    vi.stubGlobal("getComputedStyle", () => ({ overflowY: "auto" }));
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.stubGlobal("Node", class { static readonly TEXT_NODE = 3; });
+    vi.stubGlobal("HTMLBRElement", class {});
+    vi.stubGlobal("HTMLImageElement", class {});
+    vi.stubGlobal("HTMLDivElement", class {});
+
+    const result = await collectWhatsApp({
+      expected: { accountId: ACCOUNT, chatId: CHAT, name: "Group" }, limit: 10, maxMs: 1_000, scope: "loaded",
+      onProgress: () => {
+        if (swapped) return;
+        swapped = true;
+        page.setRows([
+          keyedRow(`false_${CHAT}_overlap-media`, { envelope: "[10:15, 2/3/2026] Alice:", text, scrollParent: scroll.scroller, attachment: true }),
+        ]);
+        expireAtNextRowsRead = true;
+      },
+      captureMedia: async (): Promise<AttachmentSlot[]> => {
+        captures += 1;
+        return [{ slot: 1, attachment: {
+          state: "saved", name: "report.pdf", relativePath: "media/report.pdf", mediaType: "application/pdf",
+        } }];
+      },
+    });
+
+    expect(result.stopReason).toBe("time-budget");
+    expect(swapped).toBe(true);
+    expect(overlapRead).toBe(true);
+    expect(captures).toBe(1);
+    expect(result.messages[0]?.text).toBe(text);
+    const attachment = result.messages[0]?.attachments[0]?.attachment;
+    if (retained) {
+      expect(attachment).toEqual({ state: "saved", name: "report.pdf", relativePath: "media/report.pdf", mediaType: "application/pdf" });
+    } else {
+      expect(attachment?.state).toBe("unavailable");
+      expect(attachment).not.toMatchObject({ relativePath: "media/report.pdf" });
+    }
   });
 });

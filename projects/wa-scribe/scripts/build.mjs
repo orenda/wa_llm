@@ -6,7 +6,7 @@ if (mode !== "production" && mode !== "test") {
   process.exit(1);
 }
 
-for (const entry of ["background", "content", "panel"]) {
+for (const entry of ["background", "content", "media-bridge", "panel"]) {
   process.env.WA_ENTRY = entry;
   await build({ mode, configFile: "vite.config.ts" });
 }

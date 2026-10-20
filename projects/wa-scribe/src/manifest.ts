@@ -20,13 +20,7 @@ export type ExtensionManifest = {
   host_permissions?: string[];
   oauth2?: { client_id: string; scopes: [typeof DRIVE_FILE_SCOPE] };
   key?: string;
-  content_scripts?: [
-    {
-      matches: string[];
-      js: ["content.js"];
-      run_at: "document_idle";
-    },
-  ];
+  content_scripts?: { matches: string[]; js: string[]; run_at: "document_start" | "document_idle"; world?: "MAIN" }[];
 };
 
 const EMPTY_OAUTH: PublicOAuth = { clientId: "", extensionKey: "" };
@@ -35,7 +29,7 @@ function shell(): ExtensionManifest {
   return {
     manifest_version: 3,
     name: "wa-scribe",
-    version: "0.1.4",
+    version: "0.1.5",
     description: "Export explicitly selected WhatsApp Web conversations to Markdown in your Google Drive.",
     minimum_chrome_version: "116",
     action: { default_title: "wa-scribe" },
@@ -57,6 +51,9 @@ export function createManifest(target: ExtensionTarget, oauth: PublicOAuth = EMP
   if (hosts.length > 0) manifest.host_permissions = hosts;
   return {
     ...manifest,
-    content_scripts: [{ matches: target === "test" ? [WHATSAPP_MATCH, FIXTURE_MATCH] : [WHATSAPP_MATCH], js: ["content.js"], run_at: "document_idle" }],
+    content_scripts: [
+      { matches: [WHATSAPP_MATCH], js: ["media-bridge.js"], run_at: "document_start", world: "MAIN" },
+      { matches: target === "test" ? [WHATSAPP_MATCH, FIXTURE_MATCH] : [WHATSAPP_MATCH], js: ["content.js"], run_at: "document_idle" },
+    ],
   };
 }

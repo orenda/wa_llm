@@ -1,18 +1,9 @@
-# Google setup for the installable alpha
+# Google Drive connection
 
-Use [INSTALL.md](INSTALL.md#connect-your-google-drive) for the prebuilt ZIP. Its fixed unpacked extension ID is `ekheeljiijopgjfljhdaehhoomeancmj`; no signing-key generation, client secret, Node or rebuild is needed. Enable Drive API, configure your consent audience/test user, create the Chrome-extension OAuth client bound to that ID, and enter only its public client ID in the panel's Set up Google Drive action. Replace the downloaded manifest.json and reload the extension/WhatsApp tab.
+The standard 0.1.5 package already includes the app's public Google OAuth client ID. Users install the ZIP, choose **Connect Google Drive**, and approve Google's consent screen. They do not register an OAuth app, enter a client ID, copy a manifest, install Node, or rebuild the extension. See [INSTALL.md](INSTALL.md).
 
-The installed manifest is the runtime source of OAuth configuration. It requests only `https://www.googleapis.com/auth/drive.file`, uses Chrome's token cache, and preserves the scoped WhatsApp/Google host permissions when configuration is downloaded.
+The app owner registers the Chrome-extension OAuth client once for the stable extension ID `ekheeljiijopgjfljhdaehhoomeancmj`, enables Google Drive API, and configures the consent audience. The extension requests only `https://www.googleapis.com/auth/drive.file`. Its public client ID and extension key are not secrets; a client secret, private signing key, password, access token, or refresh token must never be distributed.
 
-For a source build with the same bundled public key:
+Development builds must use a public OAuth client registered for the extension ID they load. A source build with a different public key needs a matching Chrome-extension client. This development detail does not change the standard ZIP's install flow.
 
-```bash
-export WA_SCRIBE_OAUTH_CLIENT_ID="YOUR_PUBLIC_CLIENT_ID.apps.googleusercontent.com"
-npm run build
-```
-
-If supplying `WA_SCRIBE_EXTENSION_KEY`, it must be a public DER key whose extension ID matches your OAuth client. Do not put a private key or token in that variable. An unpacked extension does not need its private signing key.
-
-Connect and startup restore do not create files. Run optional Drive test is separate; its synthetic files stay in a wa-scribe test folder for manual cleanup. Actual chat export uses the bound WhatsApp Desk tree and the persistent immutable-ID commit protocol described in INSTALL.md.
-
-No live consent or Drive operation was run for this alpha delivery; the owner requested to run those checks themselves.
+Connect and restoring extension state do not create Drive files. Export files require an explicit Sync. Run optional Drive test, under diagnostics, creates synthetic files separately for manual cleanup. Live consent and Drive behavior for this version still need the owner's pilot. A Google consent rejection may require the app owner to add the account as a test user or correct the consent audience; reinstalling the extension will not fix that registration.

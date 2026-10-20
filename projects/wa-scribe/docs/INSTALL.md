@@ -1,100 +1,53 @@
-# Install wa-scribe in Chrome
+# Install wa-scribe
 
-This is an installable **0.1.4 UI alpha**, not a verified v1 release. Chat checkboxes and Sync stay prominent; sync settings, recovery actions and Drive diagnostics are expandable. It still needs chats to be added from open WhatsApp conversations and does not save original attachments. The owner's preceding Chrome check showed connected Drive and a saved partial export with an unsupported-envelope limitation. `BUILD.txt` records this delivery's source and checks. Tests were left to the owner for this UI change.
+This is the installable **0.1.5 alpha**. The standard ZIP includes the app's public OAuth client ID. To connect, install the extension, click **Connect Google Drive**, and approve Google's consent screen. Do not create a Cloud project or edit the manifest.
 
-## Install the ZIP
+## Install or update
 
-1. [Download wa-scribe.zip](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/install/wa-scribe.zip?raw=true) and extract it into a permanent folder. Keep this folder: Chrome loads the unpacked files from it.
-2. Open `chrome://extensions`, turn on **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
-3. Open or reload [WhatsApp Web](https://web.whatsapp.com/), then click the wa-scribe extension icon to open its side panel. Chrome 116 or newer is required.
+1. Download [wa-scribe.zip](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/install/wa-scribe.zip?raw=true) and extract it into a permanent folder.
+2. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
+3. Open or reload [WhatsApp Web](https://web.whatsapp.com/) and open the wa-scribe side panel. Chrome 116 or newer is required.
 
-For an existing **0.1.3** installation, the [UI-only update ZIP](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/install/wa-scribe-ui-update.zip?raw=true) replaces just `panel.html` and `panel.js`. Extract it over the same unpacked folder, click Reload at `chrome://extensions`, and reload WhatsApp Web. It preserves your configured manifest, Google connection and stored exports. Chrome will still show manifest version 0.1.3; the new panel says **Added chats** and has **Sync settings** and **More actions**. This updates the panel only.
+To update an existing installation, extract the **full ZIP into the same unpacked folder**, allow files to be replaced, click **Reload** on `chrome://extensions`, then reload WhatsApp Web. The package keeps the same public extension key and extension ID, so Chrome retains its extension storage and Google connection. Never remove/reinstall the extension or clear/reset its storage during an update or recovery. The old UI-only update ZIP is incompatible with the current media-capable source; do not use it.
 
-To update an existing installation, back up its configured `manifest.json`, extract the new files into the same unpacked folder, and copy the old `oauth2` block into the new manifest before clicking **Reload**. Keep the new manifest's version and the existing public `key`. Do not remove/reinstall the extension or clear its storage. Confirm version 0.1.4 in `BUILD.txt` and on `chrome://extensions`, then reload WhatsApp Web. This preserves pending operations and added chats. A release packaged with the app's public OAuth client ID can eliminate the manual OAuth-copy step.
-
-## If Add current chat cannot identify the conversation
-
-1. Update to 0.1.4 using the same unpacked folder and preserved OAuth block, then reload the extension and WhatsApp Web.
-2. Open the normal conversation, wait for its messages to appear, and choose **Add current WhatsApp chat** again.
-3. If it fails, copy the visible error. An **Identity diagnostic** line contains counts, fixed format labels and booleans only; it contains no raw IDs, phone numbers, message text or names. Local-key lookup errors describe unsupported schema, missing/ambiguous identity, limits or a page change.
-
-These counts distinguish an unrecognized message structure from multiple conversation IDs. Do not send the page's HTML or raw message IDs; no identity is guessed from a chat name or message text.
-
-The included public key gives the unpacked extension this stable ID:
+The stable extension ID is:
 
 ```text
 ekheeljiijopgjfljhdaehhoomeancmj
 ```
 
-There is no private signing key, Google client secret, password or token in the package. The public extension key is not a credential. The extension's host permissions cover only WhatsApp Web and Google's API host.
+The package contains a public client ID and public extension key. It contains no client secret, private signing key, password, or token. The extension requests only the `drive.file` OAuth scope.
 
-## Connect your Google Drive
+## Connect and select chats
 
-The normal user flow should be **Connect Google Drive → Google consent → connected account**. OAuth is the permission mechanism behind that flow. The app owner registers the application once and includes its public client ID in the distributed package. Ordinary users should not create Cloud projects or edit manifests.
+Click **Connect Google Drive** and approve the requested access. Verify the connected account in the panel. Connecting alone creates no export files.
 
-The generic alpha ZIP currently has no app client ID. The following steps are owner/developer configuration for that package; your existing configured Chrome installation already has it. No Node, npm or rebuild is required for this manual owner setup. Expand **Drive setup and diagnostics** to find its controls.
+The chat list comes from this browser's local WhatsApp cache, with a limit of 5,000 records. Search and check chats; only checked chats are registered in extension storage, up to 100 registered chats. This is not a list of every server-side or archived chat. Sync visits the checked conversations through WhatsApp's normal interface; those visits can mark messages read. User interaction with WhatsApp stops the job. Ambiguous navigation, identity or ordering pauses the affected chat. Names are navigation hints; canonical account/chat IDs bind the export. If discovery is unavailable, Add current chat manually remains under Sync settings.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create or select your project and enable **Google Drive API**.
-2. Configure the OAuth consent screen for your account/audience. Use only `https://www.googleapis.com/auth/drive.file`; add your account as a test user where required. Do not publish the application for this pilot.
-3. Create an OAuth client of type **Chrome extension**. Its Item ID must be `ekheeljiijopgjfljhdaehhoomeancmj`. Copy the **public client ID**, ending in `.apps.googleusercontent.com`.
-4. In the wa-scribe panel choose **Set up Google Drive**, enter that public client ID, and click **Download manifest.json**. Replace `manifest.json` in the extracted extension folder with that downloaded file.
-5. Return to `chrome://extensions`, click **Reload** for wa-scribe, and reload WhatsApp Web. Open the panel, click **Connect Google Drive**, approve consent, and verify the displayed Google account.
+## Pilot and inspect an export
 
-Never paste a client secret, access token or refresh token. **Connect** and opening the panel do not create export files. **Run optional Drive test** is a separate user action that creates only synthetic files in its own test folder; those test files are cleaned up manually in Drive.
+1. Select two low-sensitivity chats, including one with a small photo and one with a PDF, and click **Sync selected**.
+2. Follow the panel's per-chat progress and result. If WhatsApp opens a selected conversation, let the extension finish. Interacting with WhatsApp stops the job; restart Sync explicitly after you are ready.
+3. Download the complete export folder from Drive and extract it locally. Inspect `transcript.md`, `sync.json`, and the media files. Relative attachment links work in this downloaded folder; wa-scribe does not promise that Drive's web viewer resolves them.
+4. Check that each saved photo/PDF is the exact expected original. Repeat Sync and confirm it verifies unchanged files without creating duplicates. Exercise Stop and the recovery controls before using important chats.
 
-If using a custom extension public key, rebuild with a matching Chrome OAuth client rather than mixing its ID with this prebuilt ZIP.
+Message text comes from the rendered WhatsApp conversation. Original media is saved through WhatsApp's normal Download command. A readonly lookup of the exact selected message record projects only its identity, plaintext `filehash`, optional size, MIME type and filename. Downloaded bytes must match that hash and any supplied size, and the metadata is rechecked afterward. Missing evidence, unsupported controls, grouped media and view-once media remain unavailable. A thumbnail is never presented as an original. If the normal download arrives after capture times out, Chrome may download a local copy instead; it is not marked saved in Drive.
 
-## First export
+Limits are 8 MiB per file, 32 MiB and 128 files per export generation, and 64 MiB of cached media. A limit or incomplete source boundary produces partial coverage. Unknown message envelopes keep the visible body, mark sender/time as unknown where needed, and retain partial coverage.
 
-1. Open one low-sensitivity conversation in WhatsApp Web. Click **Add current WhatsApp chat**. Nothing from an unregistered conversation is exported.
-2. Leave that chat selected. Expand **Sync settings**, choose **Preserve saved wording** (the Download behavior), **Rendered messages**, and a small message limit (for example 20).
-3. Verify the Google account, then choose **Sync selected**. Follow the per-chat result and **Open export** link.
-4. The Drive tree is `WhatsApp Desk/<chat-name>--<key>/export-<operation>/transcript.md` plus `sync.json`. Download these files from Drive and inspect the raw Markdown/JSON locally; they are not converted to Google Docs. Opening files for inspection does not change them.
-5. Repeat the pass and inspect the results. The extension reads the committed transcript/sidecar, preserves Notes/prefix bytes, retains known message IDs, and pauses on partial local edits instead of replacing them.
+The Markdown and JSON sidecar are stored with immutable copies of verified media. A changed export generation may copy or re-upload retained media. An unchanged pass verifies the existing files. **Delete export** trashes recorded transcript, sidecar, and media files but retains folders and untracked children. It does not remove other Drive files.
 
-You can register several chats. A pass freezes the selected set; each selected conversation must currently be open in an accessible WhatsApp tab. The extension does not navigate to a conversation by its display name. If a chat is not open, that chat pauses with an instruction to open it; other selected chats have independent results. Opening a conversation can mark messages read through WhatsApp's normal behavior.
+## Stop, recovery, and privacy
 
-**Older loaded history** scrolls the selected conversation upward with overlap/identity checks, up to 500 messages, 60 seconds, and 128 KiB of normalized captured data. The pending-save budget is 256 KiB per generation and 768 KiB total local state. A history boundary, account/chat change, missing ID, unknown envelope, disconnection or budget limit produces a partial/paused result. It is not a complete-archive claim, and timestamps are never a cutoff for unseen IDs.
+**Stop** ends collection and prevents new mutations at a safe boundary; a Drive operation already sent may still finish. The extension never resumes collection automatically after opening the panel or restarting Chrome. Use **Recover** for a pending save: Sync will not replay it, and Start fresh refuses while a save, deletion or cleanup is unresolved. Do not clear extension storage: it contains the recovery journal and staged attachment bytes.
 
-## Edit, Stop, recovery and deletion
+Typecheck and the production build passed on Node 24.22.0. Unit/browser tests were not run by agents, as requested. Exact package source and verification are in `BUILD.txt`. Live consent, chat discovery/navigation and photo/PDF compatibility still need your Chrome pilot. Report Chrome/OS, locale, scope and visible outcomes without sharing chat text, account identifiers, credentials or private Drive links.
 
-Sync mode/history/limits are under **Sync settings**. Each chat's recovery, fresh export, delete, IDs and detailed result are under **More actions**. Setup and the optional synthetic Drive test are under **Drive setup and diagnostics**. When connected, Reconnect is also in that section.
-
-- **Download** keeps stored wording when a source message changes. **Edit** applies positively observed changes and delete-for-everyone markers only when the generated blocks remain locally unchanged. An absent row is not a deletion. Partial local edits pause the chat; whole-block removal is retained as a tombstone when alignment is unambiguous. Notes are preserved.
-- `sync.json` retains the collector's stop reason, such as `visible-window`, `message-budget`, `byte-budget` or `time-budget`. The panel derives Partial from that same coverage record; an identical resync says Unchanged while retaining partial coverage. Verified message order never means a complete archive. A local-edit pause identifies the affected message IDs.
-- Keep the first manual pass read-only in Drive. The panel has no upload-back editor; downloading, editing and uploading a new file creates a different ID that the extension does not adopt. Test Notes/local-edit preservation only with tooling that updates the existing owned file ID.
-- **Stop** or unselecting the active chat stops collection/new mutations at a safe boundary. An already sent Drive mutation may still complete. Opening the panel or restarting Chrome never resumes collection automatically.
-- Each commit writes **new, preallocated Drive IDs**. A late create cannot overwrite newer generation files. Known IDs, exact staged content and ownership are retained before writes. **Recover** is explicit and can retry the same immutable create ID, verify a 409 against ownership/digest/read-back bytes, and publish only a coherent transcript/sidecar. This uses Drive's pre-generated-ID semantics; it is not an atomic folder transaction or a cross-device lock.
-- If a transcript/sidecar changes after capture, recovery pauses without replacing it. **Start fresh** refuses while a save, deletion or previous-generation cleanup is unresolved. Once resolved, it explicitly creates a separate export generation on the next sync, leaves the previous tree untouched, and does not inherit missing tombstones. The previous Open export link remains until a new generation is published; archived root links remain accessible afterward. Do not clear Chrome extension storage as a recovery method.
-- **Delete export** requires confirmation and the displayed bound Google account. It trashes only recorded `transcript.md` and `sync.json` files, including Notes in that transcript. Folders and untracked media are retained, even if a folder looks empty: `drive.file` may hide foreign children. A retained-folder link stays available after deletion. Interrupted cleanup retains state for retry. Drive trash/history and prior explicitly archived export trees are not erased.
-- After a new coherent generation is committed, old owned generation files are cleaned up. The panel reports pending cleanup when that cannot finish. Follow the latest **Open export** link rather than bookmarking an older generation file.
-
-## Current media and source limitations
-
-Message bodies come only from the verified open `#main` conversation. Identity uses message `data-id` values and the nonsecret `last-wid`/`last-wid-md` account identifiers. For opaque 20/32-character hex IDs, the adapter reads a complete, bounded snapshot of primary keys from `model-storage` version 2070, store `message`, using a read-only transaction. These keys include conversation identifiers across the local database; message records and bodies are never read from it or exported. Each rendered batch needs a unique exact match to one full message key per ID and one conversation. Missing/ambiguous keys, unsupported schema and context changes stop the lookup. No name, text or timestamp is used to guess identity.
-
-The key snapshot is limited to 100,000 keys, 4 MiB of UTF-8 keys, 4,096 characters per key and five seconds per lookup. Key/byte limits can pause large accounts. The browser buffers the count-bounded snapshot before byte validation. Unrelated unknown string keys are ignored only when they contain none of the requested IDs; unknown keys containing a requested ID stop the lookup. Alternate encodings are unsupported. See [the identity evidence](reviews/OPAQUE-IDENTITY.md). The adapter does not access WhatsApp credentials, private application modules or private endpoints.
-
-Visible captions/quotes are retained. **This alpha does not automatically download media originals.** Images, audio, video, documents and unsupported envelopes carry explicit unavailable/unsupported markers when original provenance/completeness cannot be established. Thumbnails are not claimed as originals, and view-once controls are never opened. Later media support needs live capability evidence for each kind.
-
-The extension does not send WhatsApp messages, run a model, sync on a schedule or create a server-side WhatsApp session. Its exported content is readable by people who have access to the destination.
-
-## Tests for you to run
-
-For the first Chrome test, use one low-sensitivity chat and this checklist:
-
-1. Connect and verify the Google account. Connect alone must create no files. The optional Drive test is separate and creates synthetic files for manual cleanup.
-2. Add the open chat, expand Sync settings and choose Preserve saved wording / Rendered messages / 20 messages, then Sync. Inspect `transcript.md`; More actions shows the raw result matching `coverage.stopReason` in `sync.json` (for example `visible-window` or `message-budget`).
-3. Repeat without changing the chat. Expect Unchanged with the same partial coverage and no duplicate message IDs.
-4. On a later pass, use Stop or unselect the active chat. Reopen the panel/restart Chrome; collection must not resume automatically.
-5. If a pass reports Recovery required, retrying Sync must say "Use Recover to finish the pending generation before another pass." Start fresh must refuse. Reconnect the same Google account and use Recover. The simulated lost-create unit regression covers this fault without changing your live network.
-
-This UI build passed typecheck and the production build. Unit/browser tests were not rerun for this UI change. To run them, use a source checkout with Node 24.22.0/npm 11.19.1:
+To run the automatic tests from a source checkout on Node 24.22.0:
 
 ```bash
 git clone --branch codex/wa-scribe-complete https://github.com/orenda/wa_llm.git
-cd wa_llm
-cd projects/wa-scribe
+cd wa_llm/projects/wa-scribe
 npm ci
 npm run typecheck
 npm run test:unit
@@ -102,4 +55,6 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Keep ordinary automatic tests offline; authorized browser/Google/WhatsApp checks are separate. For the first manual pass, check account display, one-chat export, a repeated pass, Notes preservation, Stop, restart, and explicit recovery before increasing history limits or using important chats. Report the extension version, Chrome/OS, WhatsApp locale, selected scope and the visible error/result; omit chat text, account IDs, credentials and private links.
+The browser suite uses synthetic pages and blocks live requests. Its success would not verify the live WhatsApp layout.
+
+wa-scribe does not send WhatsApp messages, run a model, sync on a schedule, open view-once content, or create a server-side WhatsApp session. Exported content is readable by people who can access the Drive destination.

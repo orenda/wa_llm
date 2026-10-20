@@ -1,6 +1,7 @@
 import { EXTENSION_KEY } from "./extension-key.ts";
 
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const DEFAULT_OAUTH_CLIENT_ID = "261687786907-34o4h04n6l78dvd9dsqov3pfvp8puh15.apps.googleusercontent.com";
 
 export type PublicOAuth = {
   clientId: string;
@@ -10,9 +11,9 @@ export type PublicOAuth = {
 declare const WA_SCRIBE_OAUTH_CLIENT_ID: string;
 declare const WA_SCRIBE_EXTENSION_KEY: string;
 
-export function publicOAuth(env: { WA_SCRIBE_OAUTH_CLIENT_ID?: string; WA_SCRIBE_EXTENSION_KEY?: string }): PublicOAuth {
+export function publicOAuth(env: { WA_SCRIBE_OAUTH_CLIENT_ID?: string | undefined; WA_SCRIBE_EXTENSION_KEY?: string | undefined }): PublicOAuth {
   return {
-    clientId: (env.WA_SCRIBE_OAUTH_CLIENT_ID ?? "").trim(),
+    clientId: (env.WA_SCRIBE_OAUTH_CLIENT_ID ?? DEFAULT_OAUTH_CLIENT_ID).trim(),
     extensionKey: (env.WA_SCRIBE_EXTENSION_KEY ?? EXTENSION_KEY).trim() || EXTENSION_KEY,
   };
 }
@@ -25,8 +26,8 @@ export function bakedOAuth(): PublicOAuth {
     return { clientId: manifest.oauth2?.client_id ?? "", extensionKey: manifest.key ?? EXTENSION_KEY };
   }
   return publicOAuth({
-    WA_SCRIBE_OAUTH_CLIENT_ID,
-    WA_SCRIBE_EXTENSION_KEY,
+    WA_SCRIBE_OAUTH_CLIENT_ID: typeof WA_SCRIBE_OAUTH_CLIENT_ID === "undefined" ? undefined : WA_SCRIBE_OAUTH_CLIENT_ID,
+    WA_SCRIBE_EXTENSION_KEY: typeof WA_SCRIBE_EXTENSION_KEY === "undefined" ? undefined : WA_SCRIBE_EXTENSION_KEY,
   });
 }
 

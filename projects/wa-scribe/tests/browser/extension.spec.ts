@@ -68,6 +68,7 @@ test("production extension loads without fixture access", async () => {
     expect(manifest.permissions).toEqual(["sidePanel", "identity", "storage", "tabs"]);
     expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*"]);
     expect(manifest.content_scripts).toEqual([
+      { matches: ["https://web.whatsapp.com/*"], js: ["media-bridge.js"], run_at: "document_start", world: "MAIN" },
       { matches: ["https://web.whatsapp.com/*"], js: ["content.js"], run_at: "document_idle" },
     ]);
     expect(launched.worker.url()).toMatch(/^chrome-extension:\/\/.+\/background\.js$/);
@@ -81,15 +82,14 @@ test("production extension loads without fixture access", async () => {
     const extensionId = launched.worker.url().split("/")[2];
     const panel = await launched.context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/panel.html`);
-    await expect(panel.locator("#status")).toHaveText(
-      "Google Drive setup is missing. Follow the install guide to configure the OAuth client ID and extension public key.",
-    );
-    await expect(panel.locator("#connect")).toBeDisabled();
+    expect(manifest.oauth2?.client_id).toBe("261687786907-34o4h04n6l78dvd9dsqov3pfvp8puh15.apps.googleusercontent.com");
+    await expect(panel.locator("#status")).toHaveText("Google Drive has not been connected.");
+    await expect(panel.locator("#connect")).toBeEnabled();
     await expect(panel.locator("#probe-run")).toBeDisabled();
-    await expect(panel.locator("#add-current")).toBeEnabled();
     await expect(panel.locator("#refresh")).toBeEnabled();
     await panel.locator("#sync-settings > summary").click();
-    await expect(panel.locator("#mode-warning")).toContainText("original attachments are not saved yet");
+    await expect(panel.locator("#add-current")).toBeEnabled();
+    await expect(panel.locator("#mode-warning")).toContainText("8 MiB per file");
     await panel.locator("#mode").selectOption("edit");
     await expect(panel.locator("#mode-warning")).toContainText("Edit mode can remove saved content");
     await panel.locator("#mode").selectOption("download");
@@ -123,7 +123,10 @@ test("test build exchanges panel and content messages on the fixture", async () 
   const launched = await launch(extensionDir);
   try {
     const manifest = await launched.worker.evaluate(() => chrome.runtime.getManifest());
-    expect(manifest.content_scripts?.[0]?.matches).toEqual(["https://web.whatsapp.com/*", "http://127.0.0.1:4179/*"]);
+    expect(manifest.content_scripts?.[0]).toEqual({
+      matches: ["https://web.whatsapp.com/*"], js: ["media-bridge.js"], run_at: "document_start", world: "MAIN",
+    });
+    expect(manifest.content_scripts?.[1]?.matches).toEqual(["https://web.whatsapp.com/*", "http://127.0.0.1:4179/*"]);
     expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*", "http://127.0.0.1:4179/*"]);
 
     const fixture = await launched.context.newPage();
@@ -182,6 +185,107 @@ test("test build exchanges panel and content messages on the fixture", async () 
       () => "blocked",
     );
     expect(liveNavigation).toBe("blocked");
+  } finally {
+    await launched.context.close();
+    launched.cleanup();
+  }
+});
+
+test("native bridge captures an armed normal document download and leaves unarmed anchors alone", async () => {
+  const launched = await launch(path.resolve("dist-test"));
+  const fixturePdf = "%PDF-1.7\nsynthetic bridge fixture\n";
+  const fixtureLiteral = JSON.stringify(fixturePdf);
+  try {
+    await launched.context.route("https://web.whatsapp.com/**", (route) => route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><button id="normal-download">Download document</button>
+        <script>
+          document.querySelector("#normal-download").addEventListener("click", () => {
+            const blob = new Blob([${fixtureLiteral}], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            document.body.dataset.blobUrl = url;
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = "fixture.pdf";
+            anchor.click();
+          });
+        </script>`,
+    }));
+    const page = await launched.context.newPage();
+    await page.goto("https://web.whatsapp.com/");
+    let downloadCount = 0;
+    page.on("download", () => { downloadCount += 1; });
+    const restoredDownloadPromise = page.waitForEvent("download", { timeout: 5_000 });
+    const outcomePromise = page.evaluate(async (fixtureText) => {
+      const channel = "wa-scribe.media";
+      const digestBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fixtureText));
+      const expectedDigest = [...new Uint8Array(digestBytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const attempt = (digest: string) => new Promise<
+        { type: "captured"; name: string; mediaType: string; bytes: number[] } | { type: "failed" }
+      >((resolve, reject) => {
+        const nonce = crypto.randomUUID();
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", receive);
+          reject(new Error("Native media bridge timed out"));
+        }, 5_000);
+        const receive = (event: MessageEvent<unknown>) => {
+          const value = event.data;
+          if (event.source !== window || event.origin !== location.origin || typeof value !== "object" || value === null ||
+              !("channel" in value) || value.channel !== channel || !("nonce" in value) || value.nonce !== nonce || !("type" in value)) return;
+          if (value.type === "armed") {
+            document.querySelector<HTMLButtonElement>("#normal-download")?.click();
+            return;
+          }
+          if (value.type === "failed") {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", receive);
+            resolve({ type: "failed" });
+            return;
+          }
+          if (value.type !== "captured" || !("name" in value) || typeof value.name !== "string" ||
+              !("blob" in value) || !(value.blob instanceof Blob)) return;
+          const name = value.name;
+          const blob = value.blob;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", receive);
+          void blob.arrayBuffer().then((bytes) => resolve({
+            type: "captured", name, mediaType: blob.type, bytes: [...new Uint8Array(bytes)],
+          }), reject);
+        };
+        window.addEventListener("message", receive);
+        window.postMessage({ channel, nonce, type: "arm", expectedDigest: digest }, location.origin);
+      });
+      const captured = await attempt(expectedDigest);
+      if (captured.type !== "captured") return { captured, mismatch: null };
+      const firstUrl = document.body.dataset.blobUrl;
+      if (firstUrl) URL.revokeObjectURL(firstUrl);
+      delete document.body.dataset.blobUrl;
+      const mismatch = await attempt("0".repeat(64));
+      return { captured, mismatch };
+    }, fixturePdf);
+    const [outcome, restoredDownload] = await Promise.all([outcomePromise, restoredDownloadPromise]);
+    expect(outcome.captured).toEqual({
+      type: "captured", name: "fixture.pdf", mediaType: "application/pdf",
+      bytes: [...new TextEncoder().encode(fixturePdf)],
+    });
+    expect(outcome.mismatch).toEqual({ type: "failed" });
+    expect(restoredDownload.suggestedFilename()).toBe("fixture.pdf");
+    expect(downloadCount).toBe(1);
+    const unarmedAnchorDispatched = await page.evaluate(() => {
+      const anchor = document.createElement("a");
+      anchor.href = "#native-anchor-check";
+      anchor.download = "native.txt";
+      let dispatched = false;
+      anchor.addEventListener("click", (event) => { dispatched = true; event.preventDefault(); });
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      const url = document.body.dataset.blobUrl;
+      if (url) URL.revokeObjectURL(url);
+      return dispatched;
+    });
+    expect(unarmedAnchorDispatched).toBe(true);
+    expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
   } finally {
     await launched.context.close();
     launched.cleanup();

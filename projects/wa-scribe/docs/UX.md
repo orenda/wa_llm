@@ -1,25 +1,19 @@
-# Chat selection and Google connection
+# Current chat selection and connection flow
 
-The intended normal flow is: install, connect Google Drive, check chats in a list, and click Sync. Requiring users to open every conversation or configure their own OAuth app is an alpha limitation, not the intended product experience.
+The 0.1.5 alpha flow is: install the standard ZIP, connect Google Drive, search the cached chat catalogue, check the chats to export, and click Sync. The panel supports up to 5,000 cached catalogue records and stores up to 100 selected chats.
 
-## Implemented UI simplification
+## Chat selection and navigation
 
-The 0.1.4 panel shows added-chat checkboxes, concise results, Open export and Sync/Stop. IDs, detailed status, archived links and recovery/deletion controls remain available under each chat's More actions. Sync settings and Drive setup/diagnostics are expandable. Configured builds hide the manual configuration action; connected builds move Reconnect into diagnostics. Text-only capability is stated explicitly.
+Chat names are display and navigation hints; they never bind an export. Sync uses WhatsApp's normal interface to open each selected conversation, then verifies the canonical account and chat IDs before collecting messages. Opening a conversation can mark it read. If navigation, canonical identity, message order, or account context is ambiguous, the extension pauses instead of guessing. User interaction with WhatsApp stops the whole job so the extension cannot continue against a changed page or selection.
 
-This changes presentation only. Existing identity bindings, source collection, selected-chat state, recovery journal and destination behavior are unchanged. It does not discover WhatsApp's complete chat list or navigate between conversations.
+The source adapter reads the visible conversation. Unknown message envelopes retain the visible body and record unknown sender/time fields with partial coverage. A last-sync timestamp does not discard unseen message IDs. Stop and pause preserve explicit coverage and unresolved work for recovery.
 
-## Chat-list and collection work still needed
+## Drive connection and export files
 
-The current collector reads bodies from the selected conversation's DOM. Other conversations' messages are not rendered there. The existing native database access reads message keys only; it is not a cached-message or attachment reader.
+The packaged public OAuth client makes connection a user flow: click Connect Google Drive and approve consent. The app owner maintains the Google registration; users do not edit manifests. Export creation requires an explicit Sync.
 
-Discovery must obtain stable account/chat IDs and display labels. Names can label rows but cannot bind exports. The observed chat database key path establishes IDs, not the still-unverified record fields needed for names. Discovery must describe its actual scope, including filters, archived chats and traversal limits.
+Each export contains `transcript.md`, `sync.json`, and any verified media copies. Markdown has relative links to media beside the transcript. Links work after downloading and extracting the complete folder locally; the Drive web viewer is not guaranteed to resolve them. A changed generation may copy or re-upload retained media, while an unchanged pass verifies existing media files. Delete trashes recorded export files, including media, and retains folders and untracked children.
 
-One possible collection path is to switch between checked chats through WhatsApp's normal UI, verify account/chat/message identity after each transition, then collect. Selection itself should not navigate or export. Sync must stop on user navigation, account change or an identity mismatch. Opening conversations can mark messages read; the owner's navigation preference is pending. The extension should not navigate until that preference is resolved and the adapter has an evidenced identity path.
+Original media is accepted through a normal Download command only when its bytes match the exact selected message's stored plaintext file hash; optional size evidence is checked. Metadata reads project a whitelist on that selected record. Unsupported controls, grouped media, view-once content or missing byte evidence remain unavailable. The limits are 8 MiB per file, 32 MiB and 128 files per generation, and 64 MiB cached media.
 
-Reading cached message records instead would require a separately implemented and validated adapter. It would still be limited to cached content and would not establish complete history or available original attachments.
-
-## Google setup belongs to the app
-
-Chrome's existing Google sign-in supplies the user's identity. The extension's registered OAuth client identifies which application requests Drive permission. The app owner enables Drive API, configures the consent audience and creates a Chrome-extension OAuth client tied to the stable extension ID. These are one-time app configuration, not per-user installation steps.
-
-A configured package includes the public client ID and uses the existing Connect action and Chrome token cache with only `drive.file`. No client secret, password, refresh token or new login system is needed. The current generic package lacks that public client ID; the installed owner configuration is not accessible from this cloud workspace. Providing the public ID allows a preconfigured release. Unpacked development does not itself require a Web Store listing. Wider distribution also needs an appropriate Google consent audience.
+The extension does not send messages, access view-once content, run a model, or use a server-side WhatsApp session. See [INSTALL.md](INSTALL.md) for the owner pilot and recovery steps.

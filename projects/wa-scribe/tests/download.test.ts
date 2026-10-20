@@ -34,6 +34,33 @@ function pass(chat: ChatExport | null, markdown: string | null, ids: string[], c
 }
 
 describe("download reconciliation", () => {
+  it("enriches a pending saved attachment by the same slot and preserves saved wording", () => {
+    const pending = observed("m40", "caption");
+    const oldFile = { state: "saved", name: "old.txt", mediaType: "text/plain", relativePath: "media/c7a18d2f/old.txt" } as const;
+    pending.attachments = [
+      { slot: 1, attachment: oldFile },
+      { slot: 2, attachment: { state: "unavailable", limitation: "bytes not delivered" } },
+    ];
+    const first = downloadPass({
+      prefix: notes, markdown: null, chat: null, binding, chatKey: "c7a18d2f", displayName: "Class 3A",
+      observed: [pending], order: "verified", contiguous: true, requestedScope: "recent",
+    });
+    expect(first.chat?.messages[0]?.attachments[0]?.attachment.state).toBe("unavailable");
+
+    const enriched = observed("m40", "new source wording", "new baseline");
+    enriched.attachments = [{ slot: 2, attachment: { state: "opaque", name: "file.bin", mediaType: null, relativePath: "media/c7a18d2f/file.bin" } }];
+    const next = downloadPass({
+      prefix: notes, markdown: first.markdown, chat: first.chat, binding, chatKey: "c7a18d2f", displayName: "Class 3A",
+      observed: [enriched], order: "verified", contiguous: true, requestedScope: "recent",
+    });
+    expect(next.chat?.messages[0]?.attachments).toEqual([
+      { slot: 1, attachment: oldFile },
+      { slot: 2, attachment: enriched.attachments[0]?.attachment },
+    ]);
+    expect(next.chat?.messages[0]?.text).toBe("caption");
+    expect(next.markdown).toContain("attachment-link-2: [Open attachment](./media/c7a18d2f/file.bin)");
+  });
+
   it("inserts older and middle history without a timestamp cutoff or a duplicate", () => {
     const first = pass(null, null, ["m40", "m42"], false);
     expect(first.phase).toBe("updated");

@@ -387,4 +387,30 @@ describe("known timestamps and attachment order", () => {
     const again = unwrap(encodeExport("", verified(message({ ...shuffled, attachments: parsed.blocks[0]?.attachments ?? [] }))));
     expect(again.metadata).toBe(right.metadata);
   });
+
+  it("renders validated relative links while retaining legacy v1 attachment metadata and fingerprints", () => {
+    const source = message({
+      attachments: [{ slot: 2, attachment: { state: "saved", name: "my photo (1).jpg", mediaType: "image/jpeg", relativePath: "media/c7a18d2f/my photo (1).jpg" } }],
+    });
+    const encoded = unwrap(encodeExport("", verified(source)));
+    expect(encoded.markdown).toContain("attachment-link-2: [Open attachment](./media/c7a18d2f/my%20photo%20%281%29.jpg)");
+    expect(encoded.metadata).not.toContain('"link"');
+
+    const legacyMarkdown = encoded.markdown.replace("attachment-link-2: [Open attachment](./media/c7a18d2f/my%20photo%20%281%29.jpg)\n", "");
+    expect(unwrap(parseTranscript(legacyMarkdown)).blocks[0]?.blockFingerprint).toBe(encoded.chat.messages[0]?.blockFingerprint);
+    expect(unwrap(decodeMetadata(encoded.metadata, binding)).messages[0]?.blockFingerprint).toBe(encoded.chat.messages[0]?.blockFingerprint);
+  });
+
+  it("rejects changed derived links and fingerprints body text that resembles a link header", () => {
+    const source = message({
+      text: "attachment-link-1: [Open attachment](./guessed.jpg)",
+      attachments: [{ slot: 1, attachment: saved }],
+    });
+    const encoded = unwrap(encodeExport("", verified(source)));
+    const changedLink = encoded.markdown.replace("./media/c7a18d2f/01.jpg", "./media/other.jpg");
+    expect(parseTranscript(changedLink)).toMatchObject({ ok: false, reason: "malformed-markdown" });
+    const parsed = unwrap(parseTranscript(encoded.markdown));
+    expect(parsed.blocks[0]?.text).toBe(source.text);
+    expect(parsed.blocks[0]?.blockFingerprint).toBe(encoded.chat.messages[0]?.blockFingerprint);
+  });
 });
