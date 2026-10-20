@@ -4,4 +4,4 @@
 
 Follow [the install and Google Drive setup guide](../docs/INSTALL.md), also included inside the ZIP as `INSTALL.md`. No Node or build tools are needed to install this package. Reload WhatsApp Web after loading the extension.
 
-Version **0.1.1 alpha** exports text; unverified original media is unavailable. TypeScript and production build passed. Tests and live Chrome/WhatsApp/Drive checks were not run, at the owner's request. `SHA256SUMS` records the packaged file's digest. To update, keep the same unpacked folder and configured OAuth block, replace the package files, then Reload; preserve extension storage.
+Version **0.1.1 alpha**, source **acdb65c**, exports text; unverified original media is unavailable. TypeScript and production build passed, and 85 unit tests passed on Node 24.22.0. Browser and live Chrome/WhatsApp/Drive checks remain unrun. `BUILD.txt` records the source/evidence and `SHA256SUMS` records the ZIP digest. To update, back up the configured manifest, replace files in the same unpacked folder, restore its OAuth block into the new manifest, then Reload; preserve extension storage.

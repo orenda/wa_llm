@@ -1,6 +1,6 @@
 # Owner checks for the installable alpha
 
-Follow [INSTALL.md](INSTALL.md). These checks have not been run for this delivery. The owner explicitly reserved all tests and live checks for themselves.
+Follow [INSTALL.md](INSTALL.md). These manual checks remain unrun. TypeScript and all 85 unit tests passed on Node 24.22.0 for `acdb65c`; browser and live account checks remain for the owner.
 
 Start with one low-sensitivity chat, Download mode, Rendered messages, and 20 messages. Record version/Chrome/OS/WhatsApp locale and visible outcomes without sharing message text, account IDs, tokens or private links.
 

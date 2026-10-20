@@ -4,7 +4,7 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: installable 0.1.1 alpha.** The production panel connects the selected-chat DOM adapter, bounded collection, Drive text export, Download/Edit, Stop, persistent recovery, fresh export, and owned-file deletion. [Download/install instructions](docs/INSTALL.md). Build and TypeScript checks were run; tests and live Google/WhatsApp checks were deliberately not run at the owner's request. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
+**Status: installable 0.1.1 alpha.** The production panel connects the selected-chat DOM adapter, bounded collection, Drive text export, Download/Edit, Stop, persistent recovery, fresh export, and owned-file deletion. [Download/install instructions](docs/INSTALL.md). TypeScript, production build and 85 unit tests passed on Node 24.22.0. Browser and live Google/WhatsApp checks remain unrun. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
 
 ## Start here
 
@@ -23,7 +23,7 @@ Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite
 
 ## Work and review
 
-The owner requested direct implementation and reserved all tests for themselves. Historical review records remain under `docs/reviews/`; their findings motivated this implementation and are not test evidence for it. Use `codex/wa-scribe-complete` for the integrated source. From the repository root, enter `projects/wa-scribe/` before running project commands.
+The owner requested direct implementation and subsequently authorized typecheck/unit tests for the Recover-only fix. Historical review records remain under `docs/reviews/`; their findings motivated this implementation and are not test evidence for it. Use `codex/wa-scribe-complete` for the integrated source. From the repository root, enter `projects/wa-scribe/` before running project commands.
 
 Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
 
@@ -41,8 +41,8 @@ npm run build
 
 ### Evidence
 
-- **This delivery:** TypeScript checks and production build only. No unit/browser tests, targeted executable probes, CI, Google consent, or live WhatsApp/Drive operations were run.
-- **Available for the owner:** `test:unit` and `test:browser`; test sources were updated for the changed contracts but have not been executed. Automatic tests must not call real Google or WhatsApp.
+- **This delivery:** TypeScript checks, production build and all 85 unit tests (17 files) passed on Node 24.22.0 for `acdb65c`. The ZIP includes that source. No browser tests, CI, Google consent or live WhatsApp/Drive operations were run.
+- **Available for the owner:** repeat `test:unit` or run the still-unrun `test:browser`. Automatic tests must not call real Google or WhatsApp.
 - **Configured CI:** [`.github/workflows/wa-scribe.yml`](../../.github/workflows/wa-scribe.yml) runs those commands on Node `24.22.0`. A green local run is not a completed remote CI run.
 - **Unrun:** real WhatsApp, the live selector diagnostic, Google OAuth, Drive writes, and the user pilot. Those stay **real WhatsApp not verified**.
 

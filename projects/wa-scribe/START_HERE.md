@@ -1,6 +1,6 @@
 # Installable alpha: owner verification next
 
-The integrated source is on `codex/wa-scribe-complete`. The owner asked the coordinating agent to implement directly and explicitly said not to run tests. No tests, probes, CI or live Google/WhatsApp operations were run for this delivery. Build and TypeScript checks are separate from those tests.
+The integrated source is on `codex/wa-scribe-complete`. For source `acdb65c`, the owner authorized typecheck/unit tests: TypeScript and all 85 unit tests passed on Node 24.22.0. The production ZIP includes that source. Browser tests, CI and live Google/WhatsApp operations remain unrun.
 
 [Install the ZIP and configure Google Drive](docs/INSTALL.md). The panel can add the currently open WhatsApp conversation, select known chats, run bounded Download/Edit, stop, recover a staged Drive generation, start fresh, and delete owned export files after confirmation. Media with unverified originals remains explicitly unavailable. If stable account/chat identity is unavailable, the adapter pauses instead of guessing.
 
