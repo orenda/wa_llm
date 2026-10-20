@@ -1,13 +1,16 @@
-wa-scribe 0.1.4 UI alpha
-Runtime source commit: 13f0267f2bd87d794342cc08cfa5eb74bf6b9c71
+wa-scribe 0.1.5 alpha
+Runtime source commit: 686b90281e2b91f226d1112e9ae394a15de6bb65
 Node: 24.22.0
-TypeScript checks: passed
+TypeScript checks (source and tests): passed
 Production build: passed
-Unit tests: not run for this UI change
-Browser tests: not run; panel expectation updated for owner execution
-Remote CI: not run
+Unit tests: not run, owner execution requested
+Browser tests: not run, owner execution requested
+Remote CI: not run (skip ci)
 Agent live Google/WhatsApp operations: none
-Owner preceding Chrome evidence: connected Drive; added chat; partial saved export
-Current limits: added/open chats only; no original attachment export
-Google app public client ID: absent from generic ZIP; owner configuration required
-UI-only update ZIP: panel files only; preserves existing 0.1.3 manifest/OAuth
+New live chat catalogue, navigation, photo/PDF behavior: unverified in owner's Chrome
+Google app public client ID: bundled; Connect Google Drive then consent
+Stable extension ID: ekheeljiijopgjfljhdaehhoomeancmj
+Original media: exact selected-message plaintext SHA-256 and optional size verification
+Media limits: 8 MiB/file, 32 MiB and 128 files/generation, 64 MiB local staging cache
+Source: rendered messages; local model-storage v2070 for identity/catalogue/selected media metadata
+Update: full ZIP into same unpacked folder; Reload extension and WhatsApp Web; keep storage
