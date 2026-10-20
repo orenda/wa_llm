@@ -1,6 +1,6 @@
 # Owner checks for the installable alpha
 
-Follow [INSTALL.md](INSTALL.md). These manual checks remain unrun. TypeScript and all 85 unit tests passed on Node 24.22.0 for `acdb65c`; browser and live account checks remain for the owner.
+Follow [INSTALL.md](INSTALL.md). The owner's first Chrome check is blocked by conversation-ID detection with visible messages. Use the 0.1.2 Identity diagnostic before proceeding. TypeScript and all 93 unit tests passed on Node 24.22.0 for `6745c9d`; browser/live export checks remain unverified.
 
 Start with one low-sensitivity chat, Download mode, Rendered messages, and 20 messages. Record version/Chrome/OS/WhatsApp locale and visible outcomes without sharing message text, account IDs, tokens or private links.
 

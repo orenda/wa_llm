@@ -1,8 +1,9 @@
-wa-scribe 0.1.1 alpha
-Source commit: acdb65c4068591c7a3e86aae4f060b0a515145c4
+wa-scribe 0.1.2 diagnostic alpha
+Source commit: 6745c9ddf5be3c48ee7d653d9c875c6c2ece3595
 Node: 24.22.0
 TypeScript checks: passed
-Unit tests: 85 passed, 17 files
+Unit tests: 93 passed, 18 files
 Production build: passed
 Browser tests: unrun
-Live WhatsApp, Google consent and Drive operations: unrun
+Owner Chrome: conversation-ID detection failed; structural diagnostics added
+Live Google consent and Drive export: unverified

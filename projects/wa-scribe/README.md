@@ -4,7 +4,7 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: installable 0.1.1 alpha.** The production panel connects the selected-chat DOM adapter, bounded collection, Drive text export, Download/Edit, Stop, persistent recovery, fresh export, and owned-file deletion. [Download/install instructions](docs/INSTALL.md). TypeScript, production build and 85 unit tests passed on Node 24.22.0. Browser and live Google/WhatsApp checks remain unrun. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
+**Status: installable 0.1.2 diagnostic alpha.** The owner's Chrome check is blocked by conversation-ID detection despite visible messages; this build adds counts-only diagnostics to resolve the source compatibility issue. The panel connects bounded collection, Drive text export, Download/Edit, Stop, recovery, fresh export and owned-file deletion. [Download/install instructions](docs/INSTALL.md). TypeScript, production build and 93 unit tests passed on Node 24.22.0. Browser and live export remain unverified. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
 
 ## Start here
 
@@ -41,10 +41,10 @@ npm run build
 
 ### Evidence
 
-- **This delivery:** TypeScript checks, production build and all 85 unit tests (17 files) passed on Node 24.22.0 for `acdb65c`. The ZIP includes that source. No browser tests, CI, Google consent or live WhatsApp/Drive operations were run.
+- **This delivery:** TypeScript checks, production build and all 93 unit tests (18 files) passed on Node 24.22.0 for `6745c9d`. The ZIP includes that source. No browser tests, CI or live account operations were run by the agent. The owner's Chrome check reported a conversation-ID failure; source compatibility/export remain unverified.
 - **Available for the owner:** repeat `test:unit` or run the still-unrun `test:browser`. Automatic tests must not call real Google or WhatsApp.
 - **Configured CI:** [`.github/workflows/wa-scribe.yml`](../../.github/workflows/wa-scribe.yml) runs those commands on Node `24.22.0`. A green local run is not a completed remote CI run.
-- **Unrun:** real WhatsApp, the live selector diagnostic, Google OAuth, Drive writes, and the user pilot. Those stay **real WhatsApp not verified**.
+- **Unverified:** real WhatsApp export, Google OAuth, Drive writes and the user pilot. The next owner check is to return the counts-only Identity diagnostic from 0.1.2.
 
 Coding agents implement one small ticket, submit the diff and real test output, and return it to the coordinating agent for review. They do not self-approve, merge, or publish. Each revised commit receives a fresh review. There is no background review service or branch protection configured by these documents.
 
