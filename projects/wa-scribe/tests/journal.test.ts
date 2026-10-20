@@ -31,7 +31,7 @@ describe("per-chat journal", () => {
     const crashed = commit("markdown");
     expect(crashed.desk).toEqual({ markdown: "new-md", metadata: "old-meta", mediaIds: ["keep", "orphan"] });
     expect(crashed.phase).toBe("recovery-required");
-    const recovered = recover(crashed.desk, crashed.journal);
+    const recovered = recover(crashed.desk, crashed.journal, binding);
     expect(recovered.phase).toBe("committed");
     expect(recovered.journal).toBeNull();
     expect(recovered.desk).toEqual({ markdown: "new-md", metadata: "new-meta", mediaIds: ["keep"] });
@@ -40,7 +40,7 @@ describe("per-chat journal", () => {
   it("keeps cleanup retryable and blocks a newer generation while a mutation is unknown", () => {
     const cleanup = commit("cleanup");
     expect(cleanup.desk.mediaIds).toEqual(["keep", "orphan"]);
-    const done = recover(cleanup.desk, cleanup.journal);
+    const done = recover(cleanup.desk, cleanup.journal, binding);
     expect(done.desk.mediaIds).toEqual(["keep"]);
 
     const unknown = commit(null, { unknownMutation: true });
@@ -61,8 +61,8 @@ describe("per-chat journal", () => {
       currentMarkdown: null,
     });
     expect(newer.phase).toBe("blocked");
-    expect(newer.desk.markdown).toBe("new-md");
-    const reread = recover(unknown.desk, unknown.journal);
+    expect(newer.desk).toEqual(unknown.desk);
+    const reread = recover(unknown.desk, unknown.journal, binding);
     expect(reread.phase).toBe("recovery-required");
     expect(reread.journal?.unknownMutation).toBe(true);
   });
@@ -83,7 +83,7 @@ describe("per-chat journal", () => {
       cleanupIds: ["keep"],
       unknownMutation: false,
     };
-    const paused = recover(desk(), foreign);
+    const paused = recover(desk(), foreign, binding);
     expect(paused.phase).toBe("paused");
     expect(paused.desk).toEqual(desk());
     expect(paused.journal).toBe(foreign);
@@ -92,5 +92,16 @@ describe("per-chat journal", () => {
     expect(stopped.desk.markdown).toBe("new-md");
     expect(stopped.phase).toBe("recovery-required");
     expect(MAX_JOURNAL_BYTES).toBeGreaterThan(1000);
+  });
+
+  it("preserves Notes byte-for-byte through recovery and pauses for a different binding", () => {
+    const notes = "## Notes\r\n\r\nKeep my exact bytes.  \r\n";
+    const noteCommit = commit("markdown", { markdown: `${notes}new transcript` });
+    const recovered = recover(noteCommit.desk, noteCommit.journal, binding);
+    expect(recovered.desk.markdown?.slice(0, notes.length)).toBe(notes);
+
+    const crashed = commit("markdown");
+    const otherBinding = { ...binding, accountId: "acct-other" };
+    expect(recover(crashed.desk, crashed.journal, otherBinding)).toMatchObject({ phase: "recovery-required", desk: crashed.desk });
   });
 });

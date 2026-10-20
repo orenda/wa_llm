@@ -65,42 +65,47 @@ test("production extension loads without fixture access", async () => {
   const launched = await launch(extensionDir);
   try {
     const manifest = await launched.worker.evaluate(() => chrome.runtime.getManifest());
-    expect(manifest.permissions).toEqual(["sidePanel"]);
-    expect(manifest.host_permissions).toBeUndefined();
-    expect(manifest.content_scripts).toBeUndefined();
+    expect(manifest.permissions).toEqual(["sidePanel", "identity", "storage", "tabs"]);
+    expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*"]);
+    expect(manifest.content_scripts).toEqual([
+      { matches: ["https://web.whatsapp.com/*"], js: ["content.js"], run_at: "document_idle" },
+    ]);
     expect(launched.worker.url()).toMatch(/^chrome-extension:\/\/.+\/background\.js$/);
 
     const fixture = await launched.context.newPage();
     await fixture.goto("http://127.0.0.1:4179/chat.html");
     await fixture.waitForTimeout(400);
     await expect(fixture.locator("#content-ack")).toHaveText("waiting");
+    await expect(fixture.locator("#content-wrong-context")).toHaveText("waiting");
 
     const extensionId = launched.worker.url().split("/")[2];
     const panel = await launched.context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/panel.html`);
     await expect(panel.locator("#status")).toHaveText(
-      "Google setup is missing. Set the OAuth client ID and extension public key, then rebuild.",
+      "Google Drive setup is missing. Follow the install guide to configure the OAuth client ID and extension public key.",
     );
     await expect(panel.locator("#connect")).toBeDisabled();
     await expect(panel.locator("#probe-run")).toBeDisabled();
-    await expect(panel.locator("#edit-pass")).toBeDisabled();
-    await expect(panel.locator("#delete-export")).toBeDisabled();
-    await expect(panel.locator("#mode-warning")).toContainText("Finish editing");
+    await expect(panel.locator("#add-current")).toBeEnabled();
+    await expect(panel.locator("#refresh")).toBeEnabled();
+    await expect(panel.locator("#mode-warning")).toContainText("Edit mode can remove saved content");
     expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
-    expect(await readJson(panel, "#panel-pong")).toEqual({
+    const panelReply = await panel.evaluate((protocol) => new Promise<unknown>((resolve) => {
+      chrome.runtime.sendMessage({ protocol, type: "panel-ping", requestId: "browser-panel" }, resolve);
+    }), PROTOCOL);
+    expect(panelReply).toEqual({
       protocol: PROTOCOL,
       type: "panel-pong",
-      requestId: "panel-ping",
+      requestId: "browser-panel",
       context: "panel",
     });
-    expect(await readJson(panel, "#panel-wrong-context")).toMatchObject({
+    const invalidReply = await panel.evaluate((protocol) => new Promise<unknown>((resolve) => {
+      chrome.runtime.sendMessage({ protocol, type: "nope", requestId: "browser-invalid" }, resolve);
+    }), PROTOCOL);
+    expect(invalidReply).toMatchObject({
       type: "rejected",
-      reason: "unexpected-sender",
-    });
-    expect(await readJson(panel, "#panel-invalid")).toMatchObject({
-      type: "rejected",
-      requestId: "invalid",
       reason: "invalid-request",
+      requestId: "browser-invalid",
     });
     await expect(panel.locator("body")).not.toContainText(/exported/i);
   } finally {
@@ -114,8 +119,8 @@ test("test build exchanges panel and content messages on the fixture", async () 
   const launched = await launch(extensionDir);
   try {
     const manifest = await launched.worker.evaluate(() => chrome.runtime.getManifest());
-    expect(manifest.content_scripts?.[0]?.matches).toEqual(["http://127.0.0.1:4179/*"]);
-    expect(manifest.host_permissions).toEqual(["http://127.0.0.1:4179/*"]);
+    expect(manifest.content_scripts?.[0]?.matches).toEqual(["https://web.whatsapp.com/*", "http://127.0.0.1:4179/*"]);
+    expect(manifest.host_permissions).toEqual(["https://web.whatsapp.com/*", "https://www.googleapis.com/*", "http://127.0.0.1:4179/*"]);
 
     const fixture = await launched.context.newPage();
     await fixture.goto("http://127.0.0.1:4179/chat.html");

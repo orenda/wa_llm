@@ -2,45 +2,76 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>wa-scribe</title>
     <style>
-      body {
-        margin: 0;
-        font: 14px/1.4 system-ui, sans-serif;
-        color: #1c1c1c;
-        background: #f6f5f2;
-      }
-      main {
-        padding: 16px;
-      }
-      h1 {
-        margin: 0 0 8px;
-        font-size: 16px;
-      }
-      p,
-      pre {
-        margin: 0 0 8px;
-      }
-      pre {
-        white-space: pre-wrap;
-        font: 12px/1.4 ui-monospace, monospace;
-      }
-      button {
-        margin: 0 8px 8px 0;
-      }
+      :root { color-scheme: light; font: 14px/1.45 system-ui, sans-serif; color: #20221f; background: #f6f5f2; }
+      body { margin: 0; min-width: 360px; }
+      main { padding: 16px; max-width: 760px; margin: auto; }
+      h1 { margin: 0 0 12px; font-size: 19px; }
+      h2 { margin: 18px 0 8px; font-size: 15px; }
+      p { margin: 0 0 8px; }
+      section { border-top: 1px solid #d8d7d1; padding-top: 12px; margin-top: 12px; }
+      button, select, input { font: inherit; }
+      button { margin: 0 6px 6px 0; padding: 5px 9px; }
+      button:disabled { opacity: .55; }
+      label { display: inline-flex; gap: 6px; align-items: center; margin: 0 12px 8px 0; }
+      input[type="number"] { width: 72px; }
+      .chat-row { border: 1px solid #d8d7d1; border-radius: 6px; background: #fff; padding: 10px; margin: 8px 0; }
+      .chat-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+      .chat-row p { overflow-wrap: anywhere; }
+      .identity { color: #55584f; font-size: 12px; }
+      .chat-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 7px; }
+      a { color: #174d83; }
+      #action-error { color: #8b1d16; font-weight: 600; }
+      #job-status { font-weight: 600; }
+      .help { color: #55584f; }
+      [hidden] { display: none !important; }
+      #panel-pong, #panel-wrong-context, #panel-invalid { display: none; }
     </style>
   </head>
   <body>
     <main>
       <h1>wa-scribe</h1>
-      <p id="status">Checking Google Drive setup.</p>
+      <p id="status">Loading panel state.</p>
       <p id="account"></p>
       <p id="notice"></p>
-      <p id="mode-warning"></p>
-      <button id="connect" type="button" disabled>Connect Google Drive</button>
-      <button id="probe-run" type="button" disabled>Run Drive test</button>
-      <button id="edit-pass" type="button" disabled>Edit selected chat</button>
-      <button id="delete-export" type="button" disabled>Delete export</button>
+      <p id="mode-warning" class="help"></p>
+      <button id="configure-drive" type="button">Set up Google Drive</button>
+      <div id="drive-actions">
+        <button id="connect" type="button" disabled>Connect Google Drive</button>
+        <button id="probe-run" type="button" disabled>Run optional Drive test</button>
+      </div>
+      <section aria-labelledby="chats-heading">
+        <h2 id="chats-heading">Open chats</h2>
+        <p class="help">Select known open chats. To add a chat, open it in WhatsApp Web and use Add current chat.</p>
+        <button id="add-current" type="button" disabled>Add current WhatsApp chat</button>
+        <button id="refresh" type="button">Refresh</button>
+        <div id="chat-list" aria-live="polite"></div>
+      </section>
+      <section aria-labelledby="sync-heading">
+        <h2 id="sync-heading">Sync selected chats</h2>
+        <label>Mode
+          <select id="mode">
+            <option value="download">Download</option>
+            <option value="edit">Edit</option>
+          </select>
+        </label>
+        <label>History scope
+          <select id="scope">
+            <option value="visible">Rendered messages</option>
+            <option value="loaded">Older loaded history</option>
+          </select>
+        </label>
+        <label>Maximum messages
+          <input id="history-limit" type="number" min="1" max="500" value="50" />
+        </label>
+        <p class="help">Rendered messages are currently in the chat DOM. Older loaded history scrolls upward for up to 60 seconds. Each pass is limited to 500 messages. Finish editing the export before syncing.</p>
+        <button id="sync" type="button" disabled>Sync selected</button>
+        <button id="stop" type="button" disabled>Stop</button>
+        <p id="job-status">No sync in progress.</p>
+        <p id="action-error" role="status" aria-live="polite"></p>
+      </section>
       <pre id="panel-pong"></pre>
       <pre id="panel-wrong-context"></pre>
       <pre id="panel-invalid"></pre>

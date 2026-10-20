@@ -71,4 +71,16 @@ describe("job coordinator", () => {
     expect(unmarked.job?.saved).toBe(1);
     expect(observeBatch(unmarked.profile, "job-1", { accountId: "acct-1", chatId: "chat-1", ids: ["m2"], aboveAnchor: false }).phase).toBe("rejected");
   });
+
+  it("rejects a late result from an older job after a new writer starts", () => {
+    const first = started();
+    const saved = markSaved(observeBatch(first.profile, "job-1", { accountId: "acct-1", chatId: "chat-1", ids: ["m1"], aboveAnchor: false }).profile, "job-1");
+    const next = startJob(saved.profile, { id: "job-2", binding, mode: "download", upperAnchor: "m40" });
+    expect(next.phase).toBe("ok");
+    expect(markSaved(next.profile, "job-1")).toMatchObject({ phase: "rejected", profile: next.profile });
+    expect(observeBatch(next.profile, "job-1", { accountId: "acct-1", chatId: "chat-1", ids: ["late"], aboveAnchor: false })).toMatchObject({
+      phase: "rejected", profile: next.profile,
+    });
+    expect(next.profile.jobs.find((job) => job.id === "job-2")?.collected).toBe(0);
+  });
 });

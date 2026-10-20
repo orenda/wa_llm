@@ -4,11 +4,11 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: T01 and T02 accepted; T03 has review fixes, and T04–T13 are unaccepted draft prototypes with missing integration.** See the [stack review and repair order](docs/reviews/STACK-b4ff2b8.md) and [current T03 assignment](docs/reviews/T03-9f5ad63.md). Production has no WhatsApp reader or working export; Edit/Delete remain disabled. The [pilot checklist](docs/PILOT.md) is a future checklist, not the next acceptance step. Google setup and all live checks remain unrun.
+**Status: installable 0.1.0 alpha.** The production panel connects the selected-chat DOM adapter, bounded collection, Drive text export, Download/Edit, Stop, persistent recovery, fresh export, and owned-file deletion. [Download/install instructions](docs/INSTALL.md). Build and TypeScript checks were run; tests and live Google/WhatsApp checks were deliberately not run at the owner's request. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
 
 ## Start here
 
-- Give another coding agent [START_HERE.md](START_HERE.md): it includes the current T03 fix branch, review links, and a copyable prompt.
+- Install and test the alpha using [INSTALL.md](docs/INSTALL.md); [START_HERE.md](START_HERE.md) records the current delivery and verification boundary.
 - Coding agent: read [AGENTS.md](AGENTS.md), then execute one assignment from [the backlog](docs/BACKLOG.md).
 - Reviewer: use [the review checklist](docs/CODE_REVIEW.md) on the exact submitted commit.
 - Product contract: [spec](docs/SPEC.md), [edge cases](docs/EDGECASES.md), and [test plan](docs/TESTPLAN.md).
@@ -23,7 +23,7 @@ Use TypeScript, a Manifest V3 extension, a small DOM-based side panel, npm, Vite
 
 ## Work and review
 
-The next work is the [T03 fix assignment](docs/reviews/T03-9f5ad63.md), followed by the [staged repair plan](docs/reviews/STACK-b4ff2b8.md#repair-order-and-current-assignment). Passing automatic checks does not close the later tickets' missing production or live gates. From the repository root, enter `projects/wa-scribe/` before running project commands.
+The owner requested direct implementation and reserved all tests for themselves. Historical review records remain under `docs/reviews/`; their findings motivated this implementation and are not test evidence for it. Use `codex/wa-scribe-complete` for the integrated source. From the repository root, enter `projects/wa-scribe/` before running project commands.
 
 Prerequisites: Node `24.22.0` (see `.node-version`; npm `11.19.1` is the npm shipped with that release) and a Chromium build Playwright can launch.
 
@@ -37,11 +37,12 @@ npm run test:browser
 npm run build
 ```
 
-`npm run build` writes the production unpacked extension to `dist/`. Load that directory from `chrome://extensions` with Developer mode on. `dist-test/` is the test build, which adds the local fixture origin; do not load it as the product. `node scripts/package-release.mjs` zips the production `dist/` to `release/wa-scribe.zip` and does not publish.
+`npm run build` writes the production unpacked extension to `dist/`. Load that directory from `chrome://extensions` with Developer mode on. `dist-test/` is the test build, which adds the local fixture origin; do not load it as the product. `node scripts/package-release.mjs` zips production files and does not publish. A prebuilt copy is in `install/wa-scribe.zip`; Google OAuth can be configured through the installed panel without Node or rebuilding.
 
 ### Evidence
 
-- **Automatic:** `typecheck`, `test:unit`, `test:browser`, and `build` run locally against the fixture page. They do not call Google or WhatsApp. `test:browser` loads the built unpacked extension in Chromium.
+- **This delivery:** TypeScript checks and production build only. No unit/browser tests, targeted executable probes, CI, Google consent, or live WhatsApp/Drive operations were run.
+- **Available for the owner:** `test:unit` and `test:browser`; test sources were updated for the changed contracts but have not been executed. Automatic tests must not call real Google or WhatsApp.
 - **Configured CI:** [`.github/workflows/wa-scribe.yml`](../../.github/workflows/wa-scribe.yml) runs those commands on Node `24.22.0`. A green local run is not a completed remote CI run.
 - **Unrun:** real WhatsApp, the live selector diagnostic, Google OAuth, Drive writes, and the user pilot. Those stay **real WhatsApp not verified**.
 

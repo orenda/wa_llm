@@ -573,7 +573,7 @@ describe("drive probe", () => {
       storage: store,
       lock,
     };
-    const running = dispatchDrive({ ...deps, message: { protocol: DRIVE_PROTOCOL, type: "probe" } });
+    const running = dispatchDrive({ ...deps, message: { protocol: DRIVE_PROTOCOL, type: "probe", expectedAccountId: account.permissionId } });
     const reopened = await dispatchDrive({ ...deps, message: { protocol: DRIVE_PROTOCOL, type: "restore" } });
     expect(reopened.phase).toBe("busy");
     let panel = planPanel(initialPanelView, reopened);

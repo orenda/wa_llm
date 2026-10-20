@@ -30,6 +30,8 @@ export type ProbeRecord = {
   rootId: string | null;
   files: ProbeFile[];
   pendingMutation: boolean;
+  pendingRevision?: string;
+  pendingAccountId?: string;
 };
 
 export type DrivePhase =
@@ -61,11 +63,13 @@ export type DriveResult = {
 };
 
 export type HttpRequest = {
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   url: string;
   token: string;
   contentType?: string;
   body?: Uint8Array;
+  maxResponseBytes?: number;
+  timeoutMs?: number;
 };
 
 export type HttpResult = { kind: "response"; status: number; bytes: Uint8Array } | { kind: "unknown" };
@@ -92,13 +96,22 @@ export type DriveRequest = {
   protocol: typeof DRIVE_PROTOCOL;
   type: "connect" | "restore" | "probe";
   ackPendingId?: string;
+  expectedAccountId?: string;
 };
 
 export type DriveStatus = { protocol: typeof DRIVE_PROTOCOL; type: "drive-status"; result: DriveResult };
 
 type Created = { id: string; name: string; mimeType: string; parents: string[] };
 
-const empty: DriveResult = { phase: "signed-out", account: null, warning: null, httpStatus: null, pendingId: null };
+const PHASES: readonly DrivePhase[] = ["missing-setup", "signed-out", "denied", "no-identity", "connected", "account-changed", "root-missing", "unknown-mutation", "auth-expired", "http-error", "invalid-json", "mismatch", "budget", "busy", "verified", "rejected"];
+
+export function driveId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(value);
+}
+
+function accountShape(value: unknown): value is DriveAccount {
+  return isRecord(value) && driveId(value.permissionId) && typeof value.emailAddress === "string" && value.emailAddress.length > 0 && value.emailAddress.length <= 320 && typeof value.displayName === "string" && value.displayName.length <= 512;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -107,29 +120,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function isDriveResult(value: unknown): value is DriveResult {
   return (
     isRecord(value) &&
-    typeof value.phase === "string" &&
-    "account" in value &&
-    "warning" in value &&
-    "httpStatus" in value &&
-    (value.pendingId === null || typeof value.pendingId === "string")
+    PHASES.some((phase) => phase === value.phase) &&
+    (value.account === null || accountShape(value.account)) &&
+    (value.warning === null || value.warning === "previous-unknown" || value.warning === "account-changed" || value.warning === "root-missing") &&
+    (value.httpStatus === null || (typeof value.httpStatus === "number" && Number.isInteger(value.httpStatus) && value.httpStatus >= 0 && value.httpStatus <= 599)) &&
+    (value.pendingId === null || (typeof value.pendingId === "string" && value.pendingId.length <= 2048))
   );
 }
 
 export function isDriveRequest(value: unknown): value is DriveRequest {
   if (!isRecord(value) || value.protocol !== DRIVE_PROTOCOL) return false;
   if (value.type !== "connect" && value.type !== "restore" && value.type !== "probe") return false;
-  return value.ackPendingId === undefined || typeof value.ackPendingId === "string";
+  return (value.ackPendingId === undefined || (typeof value.ackPendingId === "string" && value.ackPendingId.length <= 2048)) &&
+    (value.expectedAccountId === undefined || driveId(value.expectedAccountId));
 }
 
 export function isDriveStatus(value: unknown): value is DriveStatus {
   return isRecord(value) && value.protocol === DRIVE_PROTOCOL && value.type === "drive-status" && isDriveResult(value.result);
 }
 
-/** Stable id for the current unresolved ids. An ack from another panel or an older state does not match. */
+/** A mutation revision changes even when Drive has not returned the new file ID. */
 export function unresolvedKey(record: ProbeRecord | null): string | null {
   if (!record?.pendingMutation) return null;
-  const files = record.files.map((file) => `${file.name}:${file.id}`).join(",");
-  return `${record.accountId}:${record.rootId ?? ""}:${files}`;
+  return record.pendingRevision ?? `legacy:${JSON.stringify([record.accountId, record.rootId, record.files])}`;
 }
 
 export function classifyIdentityError(message: string, interactive: boolean): TokenFailure {
@@ -205,15 +218,22 @@ function readAccount(bytes: Uint8Array): DriveAccount | null {
   const parsed = parseJson(bytes);
   if (!isRecord(parsed) || !isRecord(parsed.user)) return null;
   const { permissionId, emailAddress, displayName } = parsed.user;
-  if (typeof permissionId !== "string" || permissionId.length === 0) return null;
-  if (typeof emailAddress !== "string" || emailAddress.length === 0) return null;
+  if (!driveId(permissionId)) return null;
+  if (typeof emailAddress !== "string" || emailAddress.length === 0 || emailAddress.length > 320) return null;
   return { permissionId, emailAddress, displayName: typeof displayName === "string" ? displayName : "" };
 }
 
 function readCreated(bytes: Uint8Array): Created | null {
   const parsed = parseJson(bytes);
-  if (!isRecord(parsed) || typeof parsed.id !== "string" || typeof parsed.name !== "string" || typeof parsed.mimeType !== "string") return null;
-  const parents = Array.isArray(parsed.parents) ? parsed.parents.filter((entry): entry is string => typeof entry === "string") : [];
+  if (!isRecord(parsed) || !driveId(parsed.id) || typeof parsed.name !== "string" || typeof parsed.mimeType !== "string") return null;
+  if (parsed.parents !== undefined && !Array.isArray(parsed.parents)) return null;
+  const parents: string[] = [];
+  if (Array.isArray(parsed.parents)) {
+    for (const parent of parsed.parents) {
+      if (!driveId(parent)) return null;
+      parents.push(parent);
+    }
+  }
   return { id: parsed.id, name: parsed.name, mimeType: parsed.mimeType, parents };
 }
 
@@ -238,18 +258,21 @@ function multipart(meta: { name: string; mimeType: string; parents: string[] }, 
   return { body, contentType: `multipart/related; boundary=${boundary}` };
 }
 
-type Call = { count: number; token: string; http: HttpClient; storage: ProbeStorage; remove: (token: string) => Promise<void> };
+type Call = { count: number; token: string; accountId: string | null; http: HttpClient; storage: ProbeStorage; remove: (token: string) => Promise<void> };
 
 async function exchange(
   call: Call,
   request: Omit<HttpRequest, "token">,
   record: ProbeRecord | null,
   inheritedPending: boolean,
-): Promise<{ bytes: Uint8Array } | DriveResult> {
+): Promise<{ bytes: Uint8Array; pendingId: string | null } | DriveResult> {
   if (call.count >= MAX_REQUESTS) return result("budget", null);
   call.count += 1;
   const mutating = request.method !== "GET";
-  const marked = record ? { ...record, pendingMutation: true } : null;
+  const marked = record && mutating && call.accountId
+    ? { ...record, pendingMutation: true, pendingRevision: crypto.randomUUID(), pendingAccountId: call.accountId }
+    : null;
+  if (mutating && !marked) return result("mismatch", null);
   if (mutating && marked) await call.storage.set(marked);
   const response = await call.http({ ...request, token: call.token });
   const pendingId = unresolvedKey(marked);
@@ -266,7 +289,7 @@ async function exchange(
     const kept = await restoreInherited(call, record, mutating, inheritedPending);
     return result("http-error", null, kept ? "previous-unknown" : null, response.status, kept);
   }
-  return { bytes: response.bytes };
+  return { bytes: response.bytes, pendingId };
 }
 
 async function restoreInherited(call: Call, record: ProbeRecord | null, mutating: boolean, inheritedPending: boolean): Promise<string | null> {
@@ -280,11 +303,12 @@ async function authorize(config: PublicOAuth, interactive: boolean, token: Token
   if (!oauthReady(config)) return result("missing-setup", null);
   const issued = await token.get(interactive);
   if (!issued.ok) return result(issued.reason === "expired" ? "auth-expired" : issued.reason, null);
-  const call: Call = { count: 0, token: issued.token, http, storage, remove: (value) => token.remove(value) };
+  const call: Call = { count: 0, token: issued.token, accountId: null, http, storage, remove: (value) => token.remove(value) };
   const about = await exchange(call, { method: "GET", url: ABOUT_URL }, null, false);
   if ("phase" in about) return about;
   const account = readAccount(about.bytes);
   if (!account) return result("invalid-json", null);
+  call.accountId = account.permissionId;
   return { account, call };
 }
 
@@ -328,7 +352,7 @@ async function createFile(call: Call, record: ProbeRecord, file: (typeof PROBE_F
   );
   if ("phase" in created) return created;
   const meta = readCreated(created.bytes);
-  if (!meta) return result("unknown-mutation", null, "previous-unknown", null, unresolvedKey({ ...record, pendingMutation: true }));
+  if (!meta) return result("unknown-mutation", null, "previous-unknown", null, created.pendingId);
   record.files.push({ name: file.name, id: meta.id });
   await call.storage.set({ ...record, pendingMutation: false });
   if (meta.name !== file.name || meta.mimeType !== file.mimeType || meta.mimeType.startsWith("application/vnd.google-apps.") || !meta.parents.includes(record.rootId))
@@ -347,9 +371,12 @@ export async function runProbe(input: {
   storage: ProbeStorage;
   lock: ProbeLock;
   ackPendingId?: string | null;
+  expectedAccountId?: string;
 }): Promise<DriveResult> {
   if (input.lock.held) return result("busy", input.session);
   if (!input.session) return result("signed-out", null);
+  const expectedAccountId = input.expectedAccountId ?? input.session.permissionId;
+  if (input.session.permissionId !== expectedAccountId) return result("account-changed", input.session, "account-changed");
   input.lock.held = true;
   try {
     const prior = await input.storage.get();
@@ -358,7 +385,7 @@ export async function runProbe(input: {
     const warning: DriveWarning = prior?.pendingMutation ? "previous-unknown" : prior && prior.accountId !== input.session.permissionId ? "account-changed" : null;
     const auth = await authorize(input.config, false, input.token, input.http, input.storage);
     if ("phase" in auth) return auth;
-    if (auth.account.permissionId !== input.session.permissionId) return result("account-changed", auth.account, "account-changed");
+    if (auth.account.permissionId !== expectedAccountId) return result("account-changed", auth.account, "account-changed");
     const inheritedPending = Boolean(prior?.pendingMutation);
     const staged: ProbeRecord = prior ?? { accountId: auth.account.permissionId, rootId: null, files: [], pendingMutation: false };
     const folderBody = textEncoder.encode(JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME, description: "wa-scribe synthetic probe. Not a chat export." }));
@@ -370,7 +397,7 @@ export async function runProbe(input: {
     );
     if ("phase" in folder) return { ...folder, account: auth.account, warning: mergeWarning(warning, folder.warning) };
     const created = readCreated(folder.bytes);
-    if (!created) return result("unknown-mutation", auth.account, "previous-unknown", null, unresolvedKey({ ...staged, pendingMutation: true }));
+    if (!created) return result("unknown-mutation", auth.account, "previous-unknown", null, folder.pendingId);
     let record: ProbeRecord = { accountId: auth.account.permissionId, rootId: created.id, files: [], pendingMutation: false };
     await input.storage.set(record);
     if (created.name !== FOLDER_NAME || created.mimeType !== FOLDER_MIME) return result("mismatch", auth.account, warning);
@@ -389,7 +416,7 @@ export async function runProbe(input: {
     );
     if ("phase" in patched) return { ...patched, account: auth.account, warning: mergeWarning(warning, patched.warning) };
     const patchMeta = readCreated(patched.bytes);
-    if (!patchMeta) return result("unknown-mutation", auth.account, "previous-unknown", null, unresolvedKey({ ...record, pendingMutation: true }));
+    if (!patchMeta) return result("unknown-mutation", auth.account, "previous-unknown", null, patched.pendingId);
     await input.storage.set({ ...record, pendingMutation: false });
     if (patchMeta.id !== markdown.id || patchMeta.mimeType !== "text/markdown" || patchMeta.mimeType.startsWith("application/vnd.google-apps."))
       return result("mismatch", auth.account, warning);
@@ -413,6 +440,7 @@ export async function dispatchDrive(input: {
 }): Promise<DriveResult> {
   if (input.message.type !== "probe" && input.lock.held) return result("busy", input.session);
   if (input.message.type === "probe") {
+    if (!input.message.expectedAccountId) return result("rejected", input.session);
     return runProbe({
       config: input.config,
       session: input.session,
@@ -421,13 +449,13 @@ export async function dispatchDrive(input: {
       storage: input.storage,
       lock: input.lock,
       ackPendingId: input.message.ackPendingId ?? null,
+      expectedAccountId: input.message.expectedAccountId,
     });
   }
-  return connectDrive({
-    config: input.config,
-    interactive: input.message.type === "connect",
-    http: input.http,
-    token: input.token,
-    storage: input.storage,
-  });
+  input.lock.held = true;
+  try {
+    return await connectDrive({ config: input.config, interactive: input.message.type === "connect", http: input.http, token: input.token, storage: input.storage });
+  } finally {
+    input.lock.held = false;
+  }
 }

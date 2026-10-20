@@ -71,6 +71,7 @@ describe("edge-case catalog", () => {
       name: "long.mp4",
       claimedType: "video/mp4",
       bytes: new Uint8Array(MAX_ATTACHMENT_BYTES + 1),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect(over).toEqual({ limited: "attachment byte budget" });
@@ -81,6 +82,7 @@ describe("edge-case catalog", () => {
       name: "empty.txt",
       claimedType: "text/plain",
       bytes: new Uint8Array(),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect(empty).toMatchObject({ attachment: { state: "saved", relativePath: "media/c7a18d2f/m7-02.txt" } });

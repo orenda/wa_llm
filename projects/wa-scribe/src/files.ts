@@ -10,6 +10,7 @@ export type TransportResult =
 export type TransportRequest = {
   method: "GET" | "POST" | "PATCH";
   url: string;
+  contentType?: string;
   body?: Uint8Array;
 };
 
@@ -121,15 +122,19 @@ export function rereadDoesNotResolve(pending: PendingMutation | null): PendingMu
 export function applyLate(
   tree: FileTree,
   pending: PendingMutation | null,
-  late: { operationId: string; fileId: string; parentId: string },
+  late: { operationId: string; fileId: string; parentId: string; generation?: number },
 ): { tree: FileTree; pending: PendingMutation | null; result: FileResult } {
   if (!pending || pending.operationId !== late.operationId) return { tree, pending, result: blocked("unresolved-older") };
-  if (pending.accountId !== tree.accountId) return { tree, pending, result: blocked("account-changed") };
-  const parentInside = isInsideTree(tree, late.parentId);
-  if (!parentInside) return { tree, pending, result: blocked("outside-tree") };
-  const files = tree.files.some((file) => file.id === late.fileId)
-    ? tree.files
-    : [...tree.files, { id: late.fileId, parentId: late.parentId, name: pending.name }];
+  if (pending.accountId !== tree.accountId || pending.rootId !== tree.rootId) return { tree, pending, result: blocked("account-changed") };
+  if (late.generation !== undefined && late.generation !== pending.generation) return { tree, pending, result: blocked("unresolved-older") };
+  if (!late.fileId || late.fileId === tree.rootId) return { tree, pending, result: blocked("missing-id") };
+  const current = tree.files.find((file) => file.id === late.fileId);
+  const expectedParent = pending.parentId;
+  if (late.parentId !== expectedParent || !isInsideTree(tree, late.parentId)) return { tree, pending, result: blocked("outside-tree") };
+  if (pending.fileId !== null && late.fileId !== pending.fileId) return { tree, pending, result: blocked("missing-id") };
+  if (pending.action === "update" && (!current || !isInsideTree(tree, late.fileId))) return { tree, pending, result: blocked("missing-id") };
+  if (current && (current.parentId !== late.parentId || current.name !== pending.name)) return { tree, pending, result: blocked("outside-tree") };
+  const files = current ? tree.files : [...tree.files, { id: late.fileId, parentId: late.parentId, name: pending.name }];
   return {
     tree: { ...tree, files },
     pending: null,
@@ -154,7 +159,7 @@ export async function mutate(input: {
   }
   if (input.pending) return { tree, pending: input.pending, result: unknown(null, input.pending.generation), calls: 0 };
   const parentOk = mutation.action === "create" ? isInsideTree(tree, mutation.parentId) : false;
-  const targetOk = mutation.action === "update" && mutation.fileId !== null && isInsideTree(tree, mutation.fileId);
+  const targetOk = mutation.action === "update" && mutation.fileId !== null && tree.files.some((file) => file.id === mutation.fileId && file.parentId === mutation.parentId && file.name === mutation.name) && isInsideTree(tree, mutation.fileId);
   if (!parentOk && !targetOk) return { tree, pending: input.pending, result: blocked("outside-tree"), calls: 0 };
 
   const request = mutationRequest(mutation, input.body);
@@ -195,19 +200,22 @@ function parentOf(tree: FileTree, id: string): string {
 
 function mutationRequest(mutation: FileMutation, body: Uint8Array): TransportRequest {
   if (mutation.action === "update" && mutation.fileId) {
-    return { method: "PATCH", url: `${UPLOAD_URL}/${mutation.fileId}?uploadType=media&fields=id,parents`, body };
+    return { method: "PATCH", url: `${UPLOAD_URL}/${mutation.fileId}?uploadType=media&fields=id,parents`, contentType: mutation.mimeType, body };
   }
-  const meta = JSON.stringify({ name: mutation.name, mimeType: mutation.mimeType, parents: [mutation.parentId] });
-  const payload = textEncoder.encode(`${meta}\n`);
-  const combined = new Uint8Array(payload.byteLength + body.byteLength);
-  combined.set(payload, 0);
-  combined.set(body, payload.byteLength);
-  return { method: "POST", url: `${FILES_URL}?fields=id,parents`, body: combined };
+  const boundary = `wa-scribe-${crypto.randomUUID()}`;
+  const meta = JSON.stringify({ ...(mutation.fileId ? { id: mutation.fileId } : {}), name: mutation.name, mimeType: mutation.mimeType, parents: [mutation.parentId] });
+  const head = textEncoder.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mutation.mimeType}\r\n\r\n`);
+  const tail = textEncoder.encode(`\r\n--${boundary}--\r\n`);
+  const combined = new Uint8Array(head.byteLength + body.byteLength + tail.byteLength);
+  combined.set(head);
+  combined.set(body, head.byteLength);
+  combined.set(tail, head.byteLength + body.byteLength);
+  return { method: "POST", url: `${UPLOAD_URL}?uploadType=multipart&fields=id,parents`, contentType: `multipart/related; boundary=${boundary}`, body: combined };
 }
 
 export function transportFromHttp(http: HttpClient, token: string): Transport {
   return async (request) => {
-    const sent: HttpResult = await http({ method: request.method, url: request.url, token, ...(request.body ? { body: request.body } : {}) });
+    const sent: HttpResult = await http({ method: request.method, url: request.url, token, ...(request.contentType ? { contentType: request.contentType } : {}), ...(request.body ? { body: request.body } : {}) });
     if (sent.kind === "unknown") return { kind: "unknown" };
     return { kind: "response", status: sent.status, bytes: sent.bytes, retryAfterMs: null };
   };

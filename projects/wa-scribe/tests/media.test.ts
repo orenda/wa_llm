@@ -28,6 +28,7 @@ describe("attachment slots", () => {
       name: "clip",
       claimedType: null,
       bytes: encoder.encode("wa-s-bytes-original"),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect(opaque).toMatchObject({ slot: 1, attachment: { state: "opaque", relativePath: "media/c7a18d2f/m7-01.bin" } });
@@ -39,6 +40,7 @@ describe("attachment slots", () => {
       name: "thumb",
       claimedType: "image/jpeg",
       bytes: encoder.encode("tiny"),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect(thumb).toMatchObject({ attachment: { state: "unavailable", limitation: "thumbnail" } });
@@ -49,6 +51,7 @@ describe("attachment slots", () => {
       name: "page",
       claimedType: "text/html",
       bytes: sampleErrorPage(),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect(page).toMatchObject({ attachment: { state: "unavailable", limitation: "error-page" } });
@@ -72,15 +75,25 @@ describe("attachment slots", () => {
       name: "b.jpg",
       claimedType: "image/jpeg",
       bytes: encoder.encode("x".repeat(80)),
+      originalEvidence: { resourceVerified: true, complete: true },
       tombstoned: false,
     });
     expect("slot" in filled).toBe(true);
     if (!("slot" in filled)) return;
-    const enriched = enrich(saved, filled, false);
+    const baseline = saved.attachments[1];
+    expect(baseline).toBeDefined();
+    if (!baseline) return;
+    const enriched = enrich(saved, filled, false, baseline);
     expect("text" in enriched && enriched.text).toBe("Caption stays");
     if (!("attachments" in enriched)) return;
     expect(enriched.attachments.map((entry) => entry.slot)).toEqual([1, 2, 3]);
     expect(enriched.attachments[1]?.attachment.state).toBe("saved");
+    expect(enrich(saved, filled, false)).toEqual({ conflict: true });
+    const unverified = stageAttachment({
+      chatKey: "c7a18d2f", messageId: "m7", slot: 4, name: "partial", claimedType: null,
+      bytes: encoder.encode("possibly partial bytes"), originalEvidence: { resourceVerified: true, complete: false }, tombstoned: false,
+    });
+    expect(unverified).toMatchObject({ attachment: { state: "unavailable", limitation: "original completeness was not verified" } });
     expect(shouldRetry("unsupported", 0, false)).toBe(false);
     expect(shouldRetry("pending", 1, false)).toBe(true);
     expect(shouldRetry("pending", 3, false)).toBe(false);

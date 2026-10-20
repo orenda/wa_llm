@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { accountChanged, aggregate, deleteExport, editModeWarning, freshExport, restoreCheckpoint, richMarker } from "../src/lifecycle";
+import type { Binding } from "../src/model";
+
+const binding: Binding = { accountId: "acct-1", chatId: "chat-1", destinationId: "dest-1", generation: "g1" };
 
 const files = [
   { id: "md", generation: "g1", kind: "transcript" as const },
@@ -23,10 +26,11 @@ describe("pause, delete, and recovery", () => {
   it("starts a fresh generation beside the old tree and can restore a checkpoint", () => {
     const fresh = freshExport("root-1");
     expect(fresh.previousRoot).toBe("root-1");
-    expect(fresh.rootId).not.toBe("root-1");
+    expect(fresh.rootId).toBeNull();
+    expect(fresh.rootPlan).toBe("allocate-new-root");
     expect(fresh.warning).toContain("tombstones");
-    expect(restoreCheckpoint({ generation: "g1" })).toEqual({ restored: { generation: "g1" } });
-    expect(restoreCheckpoint(null)).toEqual({ phase: "recovery-required" });
+    expect(restoreCheckpoint(JSON.stringify({ generation: "g1" }), binding)).toEqual({ phase: "recovery-required" });
+    expect(restoreCheckpoint(null, binding)).toEqual({ phase: "recovery-required" });
     expect(accountChanged("acct-1", "acct-2").paused).toBe(true);
   });
 

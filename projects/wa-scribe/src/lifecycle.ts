@@ -1,3 +1,6 @@
+import { decodeMetadata } from "./format";
+import type { Binding, ChatExport } from "./model";
+
 export function editModeWarning(): string {
   return "Edit mode can remove saved messages that WhatsApp showed as changed or deleted. Finish editing the file before starting.";
 }
@@ -15,18 +18,27 @@ export function deleteExport(files: readonly OwnedFile[], generation: string, fa
   };
 }
 
-export function freshExport(previousRoot: string): { rootId: string; generation: string; previousRoot: string; warning: string } {
+export function freshExport(previousRoot: string): {
+  rootId: null;
+  rootPlan: "allocate-new-root";
+  generation: string;
+  previousRoot: string;
+  warning: string;
+} {
   return {
-    rootId: `${previousRoot}-fresh`,
-    generation: `${previousRoot}-g2`,
+    rootId: null,
+    rootPlan: "allocate-new-root",
+    generation: crypto.randomUUID(),
     previousRoot,
     warning: "A fresh export does not inherit local-deletion tombstones from missing metadata. The previous tree is left in place.",
   };
 }
 
-export function restoreCheckpoint<T>(checkpoint: T | null): { restored: T } | { phase: "recovery-required" } {
-  if (checkpoint === null) return { phase: "recovery-required" };
-  return { restored: checkpoint };
+export function restoreCheckpoint(checkpoint: unknown, expected: Binding): { restored: ChatExport } | { phase: "recovery-required" } {
+  if (typeof checkpoint !== "string") return { phase: "recovery-required" };
+  const decoded = decodeMetadata(checkpoint, expected);
+  if (!decoded.ok) return { phase: "recovery-required" };
+  return { restored: decoded.value };
 }
 
 export function richMarker(kind: "quote" | "poll" | "reaction" | "contact" | "location" | "view-once", text: string | null): { text: string; limitation: string; opened: false } {

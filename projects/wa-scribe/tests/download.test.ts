@@ -44,6 +44,7 @@ describe("download reconciliation", () => {
     const second = pass(first.chat, first.markdown, ["m42", "m43", "m44"], true);
     expect(second.inserted).toEqual(["m43", "m44"]);
     expect(second.chat?.messages.map((message) => message.id)).toEqual(["m40", "m42", "m43", "m44"]);
+    expect(second.chat?.coverage.gaps).toContainEqual({ afterId: "m40", beforeId: "m42", reason: "unverified-between" });
 
     const repeat = pass(second.chat, second.markdown, ["m42", "m43", "m44"], true);
     expect(repeat.phase).toBe("unchanged");
@@ -123,5 +124,24 @@ describe("download reconciliation", () => {
     expect(removed.chat?.displayName).toBe("Renamed");
     expect(removed.chat?.chatKey).toBe("c7a18d2f");
     expect(removed.markdown).not.toContain("resurrected");
+  });
+
+  it("pauses on a partial local edit or an export from another binding", () => {
+    const first = pass(null, null, ["m40", "m42"], true);
+    expect(first.chat).not.toBeNull();
+    if (!first.chat || !first.markdown) return;
+
+    const partialEdit = first.markdown.replace("text m40", "my partial note");
+    const edited = pass(first.chat, partialEdit, ["m40", "m42"], true);
+    expect(edited.phase).toBe("paused");
+    expect(edited.reason).toBe("local-edit");
+    expect(edited.markdown).toBe(partialEdit);
+    expect(edited.chat).toEqual(first.chat);
+
+    const foreign = { ...first.chat, accountId: "acct-other" };
+    const mismatched = pass(foreign, first.markdown, ["m40", "m42"], true);
+    expect(mismatched.phase).toBe("paused");
+    expect(mismatched.reason).toBe("binding-mismatch");
+    expect(mismatched.markdown).toBe(first.markdown);
   });
 });

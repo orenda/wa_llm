@@ -1,4 +1,4 @@
-import { downloadPass, type ObservedMessage } from "./download";
+import { downloadPass, sameBinding, type ObservedMessage } from "./download";
 import { commitChat, type Desk, type Journal } from "./journal";
 import type { Binding, Timestamp } from "./model";
 import { readSource, type SourceMessage } from "./source";
@@ -36,6 +36,9 @@ export function runTextDownload(input: {
   journal: Journal | null;
   chat: import("./model").ChatExport | null;
 }): AlphaResult {
+  if (input.expected.accountId !== input.binding.accountId || input.expected.chatId !== input.binding.chatId || (input.chat && !sameBinding(input.chat, input.binding))) {
+    return { phase: "paused", reason: "binding-mismatch", ids: [], desk: input.desk, journal: input.journal };
+  }
   const read = readSource(input.html, input.expected);
   if (!read.ok) return { phase: "paused", reason: read.reason, ids: [], desk: input.desk, journal: input.journal };
   const downloaded = downloadPass({
@@ -67,6 +70,9 @@ export function runTextDownload(input: {
     capturedMarkdown: input.desk.markdown,
     currentMarkdown: input.desk.markdown,
   });
+  if (committed.phase !== "committed") {
+    return { phase: "paused", reason: committed.phase, ids: [], desk: committed.desk, journal: committed.journal };
+  }
   return {
     phase: downloaded.phase,
     reason: null,

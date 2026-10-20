@@ -1,6 +1,6 @@
 # Implementation backlog
 
-**T01 and T02 accepted. T03 findings remain; T04–T13 are unaccepted drafts, with correctness fixes and production integration outstanding.** See the [exact-SHA stack review and repair order](reviews/STACK-b4ff2b8.md). T02's [review](reviews/T02-500480a.md) and T01's [review](reviews/T01-49b528a.md) remain the accepted baselines. No real WhatsApp/Drive verification is recorded. Work in `projects/wa-scribe/` inside the `wa_llm` repository. The coordinator reviews each new SHA; a handoff's completion label does not establish that its requirements were implemented or tested.
+**Integrated 0.1.0 alpha on `codex/wa-scribe-complete`; owner testing pending.** The owner authorized direct implementation across the drafts and explicitly reserved tests for themselves. The historical [stack review](reviews/STACK-b4ff2b8.md) and T01/T02 records remain references; they do not accept this new implementation. Use [INSTALL.md](INSTALL.md) for actual capabilities, installation, Google setup and limits. No new test or live-verification pass is claimed.
 
 Product behavior is defined by [SPEC](SPEC.md), [TESTPLAN](TESTPLAN.md), and the [42 edge cases](EDGECASES.md). This backlog orders the work; it does not weaken those contracts. Local-folder export, agents, model calls, and message sending are outside the initial Drive delivery.
 
@@ -33,4 +33,4 @@ The coordinator can assign T03 after T01 while T02 contracts are reviewed. T05 w
 
 ## Current assignment
 
-Fix **T03 only**, continuing on `cursor/wa-scribe-t03-e20a` from `9f5ad6398d71ccd5903be91082dda9c14a147881`, using its [three-finding assignment](reviews/T03-9f5ad63.md). Return for review with checks and exact SHA. Keep the later draft branches; repair and restack them in the [reviewed dependency order](reviews/STACK-b4ff2b8.md#repair-order-and-current-assignment). The ZIP/catalog/checklist are draft artifacts, not a completed T13 or a pilot pass.
+The user runs automatic tests and the owner-operated low-sensitivity pilot on the integrated branch. Build/typecheck completion alone does not close the delivery gates above. In particular, media originals, actual WhatsApp selectors, real Drive behavior, measured budgets and multi-chat lifecycle need live evidence before a verified v1 claim.

@@ -1,32 +1,7 @@
-# Current assignment: T03 fixes, then staged stack review
+# Installable alpha: owner verification next
 
-T01 and T02 are accepted. T03 remains at `9f5ad6398d71ccd5903be91082dda9c14a147881` with [three remaining review findings](docs/reviews/T03-9f5ad63.md). T04–T13 exist as stacked draft prototypes; see the [cumulative review and repair order](docs/reviews/STACK-b4ff2b8.md). They are not accepted or ready for the pilot. Production still has no WhatsApp reader or working export.
+The integrated source is on `codex/wa-scribe-complete`. The owner asked the coordinating agent to implement directly and explicitly said not to run tests. No tests, probes, CI or live Google/WhatsApp operations were run for this delivery. Build and TypeScript checks are separate from those tests.
 
-## Copy this prompt
+[Install the ZIP and configure Google Drive](docs/INSTALL.md). The panel can add the currently open WhatsApp conversation, select known chats, run bounded Download/Edit, stop, recover a staged Drive generation, start fresh, and delete owned export files after confirmation. Media with unverified originals remains explicitly unavailable. If stable account/chat identity is unavailable, the adapter pauses instead of guessing.
 
-```text
-Repository: https://github.com/orenda/wa_llm
-Project directory: projects/wa-scribe/
-Continue branch: cursor/wa-scribe-t03-e20a
-Base: 9f5ad6398d71ccd5903be91082dda9c14a147881
-
-Read AGENTS.md and docs/tasks/T03.md. Read the coordinating review at:
-https://github.com/orenda/wa_llm/blob/codex/wa-scribe-stack-review/projects/wa-scribe/docs/reviews/T03-9f5ad63.md
-
-Fix T03 only: bind each probe to the account shown by its initiating panel;
-bind warning acknowledgment to the actual pending operation revision;
-notify/refresh reopened Busy panels on exceptions and worker loss.
-Write meaningful production-wiring and failure-sequence regressions.
-Preserve the existing unknown-write handling and only drive.file scope.
-Keep code compact, avoid new frameworks/dependencies, and leave the accepted
-codec, Python project, and CI unchanged. All automatic tests stay offline.
-
-Run typecheck, test:unit, test:browser, and build plus CI. Return exact base/head
-SHAs, changed behavior/files, actual test counts/results, and unrun live gates.
-Stop for coordinator review. Do not merge, publish, restack other branches,
-start another ticket, or call T04–T13 complete in this submission.
-```
-
-The review files are on `codex/wa-scribe-stack-review`. To read them without changing an existing working branch, fetch that branch and use `git show FETCH_HEAD:projects/wa-scribe/docs/reviews/T03-9f5ad63.md`. Preserve local changes and use the existing checkout; no extra Git worktree is needed.
-
-After T03 review, repair/review dependent tickets in the order recorded in the stack review. Restacking is a separate coordinated step. Google console configuration and the user's Chrome consent remain prerequisites for live proof; test passing cannot supply missing production code or a missing account session.
+The owner runs the tests listed in INSTALL.md and then the low-sensitivity Chrome/Drive checks. Do not copy historical passing counts into this delivery's results or claim a verified v1 release. Earlier draft/review records are retained under docs/reviews/ for traceability.

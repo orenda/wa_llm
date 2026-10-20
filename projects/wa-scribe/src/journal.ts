@@ -15,6 +15,7 @@ export type Journal = {
   metadata: string;
   cleanupIds: string[];
   unknownMutation: boolean;
+  before?: { markdown: string | null; metadata: string | null };
 };
 
 export type Desk = {
@@ -33,10 +34,18 @@ function paused(desk: Desk, journal: Journal | null): { desk: Desk; journal: Jou
   return { desk, journal, phase: "paused" };
 }
 
-export function recover(desk: Desk, journal: Journal | null): { desk: Desk; journal: Journal | null; phase: CommitPhase } {
+function sameBinding(left: Binding, right: Binding): boolean {
+  return left.accountId === right.accountId && left.chatId === right.chatId && left.destinationId === right.destinationId && left.generation === right.generation;
+}
+
+export function recover(desk: Desk, journal: Journal | null, expected?: Binding): { desk: Desk; journal: Journal | null; phase: CommitPhase } {
   if (!journal) return { desk, journal: null, phase: "committed" };
   if (journal.schema !== JOURNAL_SCHEMA) return paused(desk, journal);
-  if (journal.unknownMutation) return { desk, journal, phase: "recovery-required" };
+  if (journal.unknownMutation || !expected || !sameBinding(journal.binding, expected)) return { desk, journal, phase: "recovery-required" };
+  const before = journal.before;
+  const markdownKnown = desk.markdown === journal.markdown || (before !== undefined && desk.markdown === before.markdown);
+  const metadataKnown = desk.metadata === journal.metadata || (before !== undefined && desk.metadata === before.metadata);
+  if (!markdownKnown || !metadataKnown) return { desk, journal, phase: "aborted" };
   return finish(desk, journal);
 }
 
@@ -67,14 +76,17 @@ export function commitChat(input: {
   currentMarkdown: string | null;
 }): { desk: Desk; journal: Journal | null; phase: CommitPhase } {
   if (input.journal && input.journal.schema !== JOURNAL_SCHEMA) return paused(input.desk, input.journal);
-  if (input.journal && input.journal.unknownMutation && input.generation !== input.journal.generation) {
+  if (input.journal && (!sameBinding(input.journal.binding, input.binding) || input.journal.unknownMutation)) {
     return { desk: input.desk, journal: input.journal, phase: "blocked" };
   }
-  if (input.journal && input.journal.step !== "committed" && input.journal.operationId !== input.operationId) {
-    return { desk: input.desk, journal: input.journal, phase: "recovery-required" };
-  }
-  if (input.capturedMarkdown !== null && input.currentMarkdown !== input.capturedMarkdown) {
+  if (input.currentMarkdown !== input.capturedMarkdown || input.desk.markdown !== input.currentMarkdown) {
     return { desk: input.desk, journal: input.journal, phase: "aborted" };
+  }
+  if (input.journal) {
+    if (input.journal.operationId !== input.operationId || input.journal.generation !== input.generation || input.journal.markdown !== input.markdown || input.journal.metadata !== input.metadata) {
+      return { desk: input.desk, journal: input.journal, phase: "recovery-required" };
+    }
+    return recover(input.desk, input.journal, input.binding);
   }
   const journal: Journal = {
     schema: JOURNAL_SCHEMA,
@@ -86,8 +98,10 @@ export function commitChat(input: {
     metadata: input.metadata,
     cleanupIds: input.cleanupIds,
     unknownMutation: input.unknownMutation,
+    before: { markdown: input.desk.markdown, metadata: input.desk.metadata },
   };
   if (journalBytes(journal) > MAX_JOURNAL_BYTES) return paused(input.desk, input.journal);
+  if (journal.unknownMutation) return { desk: input.desk, journal, phase: "recovery-required" };
   if (input.failAt === "prepared") return { desk: input.desk, journal, phase: "recovery-required" };
   let desk = input.desk;
   journal.step = "markdown";
@@ -96,7 +110,7 @@ export function commitChat(input: {
   journal.step = "metadata";
   desk = { ...desk, metadata: journal.metadata };
   if (input.failAt === "metadata") return { desk, journal, phase: "recovery-required" };
-  if (input.failAt === "cleanup" || journal.unknownMutation) return { desk, journal: { ...journal, step: "cleanup" }, phase: "recovery-required" };
+  if (input.failAt === "cleanup") return { desk, journal: { ...journal, step: "cleanup" }, phase: "recovery-required" };
   desk = { ...desk, mediaIds: desk.mediaIds.filter((id) => !journal.cleanupIds.includes(id)) };
   return { desk, journal: null, phase: "committed" };
 }

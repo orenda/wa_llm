@@ -144,7 +144,9 @@ describe("edit reconciliation", () => {
       requestedScope: "recent",
     });
     expect(conflict.conflicts).toEqual(["m1"]);
-    expect(conflict.chat?.messages[0]?.text).toBe("local note");
-    expect(conflict.markdown?.startsWith(notes)).toBe(true);
+    expect(conflict.phase).toBe("paused");
+    expect(conflict.reason).toBe("local-edit");
+    expect(conflict.chat?.messages[0]?.text).toBe("one");
+    expect(conflict.markdown).toBe(local);
   });
 });

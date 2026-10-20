@@ -35,11 +35,19 @@ export function stageAttachment(input: {
   name: string;
   claimedType: string | null;
   bytes: Uint8Array | null;
+  originalEvidence?: { resourceVerified: boolean; complete: boolean };
   tombstoned: boolean;
 }): AttachmentSlot | { suppressed: true } | { limited: string } {
   if (input.tombstoned) return { suppressed: true };
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.chatKey) || !/^[a-zA-Z0-9_-]+$/.test(input.messageId) ||
+      !Number.isSafeInteger(input.slot) || input.slot < 1) {
+    return { limited: "invalid attachment path or slot" };
+  }
   if (input.bytes === null) {
     return { slot: input.slot, attachment: { state: "pending", limitation: "bytes were not delivered" } };
+  }
+  if (input.originalEvidence?.resourceVerified !== true || input.originalEvidence.complete !== true) {
+    return { slot: input.slot, attachment: { state: "unavailable", limitation: "original completeness was not verified" } };
   }
   const verdict = classifyBytes(input.bytes, input.claimedType);
   if (verdict === "error-page" || verdict === "thumbnail") {
@@ -76,10 +84,16 @@ export function stageAttachment(input: {
   };
 }
 
-export function enrich(message: MessageDraft, slot: AttachmentSlot, tombstoned: boolean): MessageDraft | { suppressed: true } | { conflict: true } {
+export function enrich(
+  message: MessageDraft,
+  slot: AttachmentSlot,
+  tombstoned: boolean,
+  expectedBaseline?: AttachmentSlot,
+): MessageDraft | { suppressed: true } | { conflict: true } {
   if (tombstoned) return { suppressed: true };
   const existing = message.attachments.find((entry) => entry.slot === slot.slot);
-  if (existing && existing.attachment.state === "saved" && slot.attachment.state !== "saved") return { conflict: true };
+  if (existing && (expectedBaseline === undefined || JSON.stringify(existing) !== JSON.stringify(expectedBaseline))) return { conflict: true };
+  if (!existing && expectedBaseline !== undefined) return { conflict: true };
   const attachments = [...message.attachments.filter((entry) => entry.slot !== slot.slot), slot].sort((left, right) => left.slot - right.slot);
   return { ...message, text: message.text, attachments };
 }

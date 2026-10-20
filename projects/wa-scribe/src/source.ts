@@ -59,15 +59,19 @@ function articles(html: string): { opening: string; inner: string }[] {
   return found;
 }
 
-function mainOpening(html: string): string | null {
-  const match = /<main\b([^>]*)>/i.exec(html);
-  return match?.[1] ?? null;
+function selectedMain(html: string): { opening: string; inner: string } | null {
+  const matches = [...html.matchAll(/<main\b([^>]*)>([\s\S]*?)<\/main>/gi)];
+  if (matches.length !== 1) return null;
+  const match = matches[0];
+  if (!match || /<main\b/i.test(match[2] ?? "")) return null;
+  return { opening: match[1] ?? "", inner: match[2] ?? "" };
 }
 
 /** Counts structure only. Message text is not returned. */
 export function diagnose(html: string): SourceDiagnostic {
-  const main = mainOpening(html);
-  const rows = articles(html);
+  const selected = selectedMain(html);
+  const main = selected?.opening ?? null;
+  const rows = articles(selected?.inner ?? "");
   return {
     mode: "diagnostic",
     accountPresent: main !== null && attr(main, "data-account-id") !== null,
@@ -79,7 +83,8 @@ export function diagnose(html: string): SourceDiagnostic {
 }
 
 export function readSource(html: string, expected?: { accountId: string; chatId: string }): SourceRead {
-  const main = mainOpening(html);
+  const selected = selectedMain(html);
+  const main = selected?.opening ?? null;
   if (!main) return { ok: false, reason: "missing-account", index: null };
   const accountId = attr(main, "data-account-id");
   const chatId = attr(main, "data-chat-id");
@@ -92,7 +97,7 @@ export function readSource(html: string, expected?: { accountId: string; chatId:
   }
   const messages: SourceMessage[] = [];
   const seen = new Set<string>();
-  const rows = articles(html);
+  const rows = articles(selected?.inner ?? "");
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
     if (!row || attr(row.opening, "data-placeholder") !== null) continue;
