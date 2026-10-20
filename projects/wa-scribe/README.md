@@ -4,7 +4,7 @@ A proposed Chrome extension that exports explicitly selected WhatsApp Web chats 
 
 This is a separate project inside the `wa_llm` Git repository at `projects/wa-scribe/`. Its package, source, tests, and build outputs live here. It shares repository history and licensing with the parent; the Python bot has its own runtime and dependencies.
 
-**Status: installable 0.1.2 diagnostic alpha.** The owner's Chrome check is blocked by conversation-ID detection despite visible messages; this build adds counts-only diagnostics to resolve the source compatibility issue. The panel connects bounded collection, Drive text export, Download/Edit, Stop, recovery, fresh export and owned-file deletion. [Download/install instructions](docs/INSTALL.md). TypeScript, production build and 93 unit tests passed on Node 24.22.0. Browser and live export remain unverified. Media without verified original bytes is explicitly unavailable. This is not a verified v1 release.
+**Status: installable 0.1.3 compatibility alpha.** This build resolves the owner's opaque DOM message IDs through a bounded, read-only snapshot of native message keys. Message bodies still come from the open conversation. The owner's key-only checks established a unique mapping for four visible messages; the updated extension still needs a Chrome retry. The panel connects bounded collection, Drive text export, Download/Edit, Stop, recovery, fresh export and owned-file deletion. [Download/install instructions](docs/INSTALL.md). Browser and live export remain unverified. Media without verified original bytes is explicitly unavailable.
 
 ## Start here
 
@@ -41,10 +41,10 @@ npm run build
 
 ### Evidence
 
-- **This delivery:** TypeScript checks, production build and all 93 unit tests (18 files) passed on Node 24.22.0 for `6745c9d`. The ZIP includes that source. No browser tests, CI or live account operations were run by the agent. The owner's Chrome check reported a conversation-ID failure; source compatibility/export remain unverified.
+- **This delivery:** `install/BUILD.txt` records the exact source, TypeScript/unit/build results and unrun checks for the ZIP. No browser tests, CI or live account operations were run by the agent. [Identity compatibility evidence](docs/reviews/OPAQUE-IDENTITY.md) records the owner's sanitized checks and the resolver's limits.
 - **Available for the owner:** repeat `test:unit` or run the still-unrun `test:browser`. Automatic tests must not call real Google or WhatsApp.
 - **Configured CI:** [`.github/workflows/wa-scribe.yml`](../../.github/workflows/wa-scribe.yml) runs those commands on Node `24.22.0`. A green local run is not a completed remote CI run.
-- **Unverified:** real WhatsApp export, Google OAuth, Drive writes and the user pilot. The next owner check is to return the counts-only Identity diagnostic from 0.1.2.
+- **Unverified:** the updated unpacked extension on real WhatsApp, Google OAuth, Drive writes and the user pilot. Next: update in place, reload WhatsApp Web, add the open chat and run one small rendered pass.
 
 Coding agents implement one small ticket, submit the diff and real test output, and return it to the coordinating agent for review. They do not self-approve, merge, or publish. Each revised commit receives a fresh review. There is no background review service or branch protection configured by these documents.
 

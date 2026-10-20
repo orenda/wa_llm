@@ -183,3 +183,85 @@ test("test build exchanges panel and content messages on the fixture", async () 
     launched.cleanup();
   }
 });
+
+test("production adapter resolves opaque DOM IDs using native IndexedDB keys only", async () => {
+  const launched = await launch(path.resolve("dist"));
+  const rawIds = ["0123456789abcdefabcd", "0123456789abcdef0123456789abcdef"];
+  const expected = { accountId: "15551234567@c.us", chatId: "12025550123@c.us", name: "Fixture chat" };
+  const keys = rawIds.map((id, index) => `${index === 1}_${expected.chatId}_${id}`);
+  try {
+    await launched.context.route("https://web.whatsapp.com/**", (route) => route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><div id="pane-side"><div aria-selected="true"></div></div>
+        <div id="main"><header><span title="Fixture chat"></span></header>
+        ${rawIds.map((id, index) => `<div data-id="${id}"><div data-pre-plain-text="[12:3${index}, 10/20/2026] Alice: ">
+          <span class="selectable-text">DOM message ${index + 1}</span></div></div>`).join("")}</div>`,
+    }));
+    const page = await launched.context.newPage();
+    await page.goto("https://web.whatsapp.com/");
+    await page.evaluate(async ({ accountId, keys }) => {
+      localStorage.setItem("last-wid", accountId);
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const opening = indexedDB.open("model-storage", 2070);
+        opening.onupgradeneeded = () => opening.result.createObjectStore("message", { keyPath: "id" });
+        opening.onerror = () => reject(opening.error);
+        opening.onsuccess = () => resolve(opening.result);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction("message", "readwrite"), store = tx.objectStore("message");
+          for (const id of [...keys, "notification-template", "false_99999999999@c.us_deadbeefdeadbeefdead"]) {
+            store.put({ id, body: "DATABASE BODY MUST NOT BE COLLECTED" });
+          }
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } finally { db.close(); }
+    }, { accountId: expected.accountId, keys });
+    const tabId = await launched.worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "https://web.whatsapp.com/*" });
+      if (tab?.id === undefined) throw new Error("Fixture tab is missing");
+      return tab.id;
+    });
+    const inspect = () => launched.worker.evaluate((tabId) => chrome.tabs.sendMessage(tabId, {
+      protocol: "wa-scribe.app", type: "inspect",
+    }), tabId);
+    await expect.poll(() => inspect().catch(() => null)).toMatchObject({ ok: true, chat: expected, rendered: 2 });
+    const collected = await launched.worker.evaluate(({ tabId, expected }) => new Promise<unknown>((resolve, reject) => {
+      const port = chrome.tabs.connect(tabId, { name: "wa-scribe.app" });
+      const timeout = setTimeout(() => { port.disconnect(); reject(new Error("Fixture collection timed out")); }, 10_000);
+      port.onMessage.addListener((message: unknown) => {
+        if (typeof message !== "object" || message === null || !("type" in message) || message.type === "progress") return;
+        clearTimeout(timeout);
+        resolve(message);
+        port.disconnect();
+      });
+      port.postMessage({ type: "collect", expected, scope: "visible", limit: 20 });
+    }), { tabId, expected });
+    expect(collected).toMatchObject({ type: "result", value: {
+      chat: expected, order: "verified", contiguous: true, stopReason: "visible-window",
+      messages: [{ id: keys[0], text: "DOM message 1" }, { id: keys[1], text: "DOM message 2" }],
+    } });
+    expect(JSON.stringify(collected)).not.toContain("DATABASE BODY MUST NOT BE COLLECTED");
+    await page.evaluate(async (id) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const opening = indexedDB.open("model-storage", 2070);
+        opening.onerror = () => reject(opening.error);
+        opening.onsuccess = () => resolve(opening.result);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction("message", "readwrite");
+          tx.objectStore("message").put({ id: `false_99999999999@c.us_${id}` });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } finally { db.close(); }
+    }, rawIds[0]);
+    expect(await inspect()).toMatchObject({ ok: false, reason: "A rendered message ID matches multiple local message keys." });
+    expect(launched.blocked.filter((url) => url.includes("googleapis.com"))).toEqual([]);
+  } finally {
+    await launched.context.close();
+    launched.cleanup();
+  }
+});

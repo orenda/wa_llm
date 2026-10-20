@@ -2,14 +2,14 @@ import { contentHello, panelPing } from "./protocol";
 import { reportExchange } from "./report";
 import { runTextDownload } from "./alpha";
 import { diagnose, readSource } from "./source";
-import { collectWhatsApp, inspectWhatsApp } from "./whatsapp";
+import { collectWhatsApp, inspectWhatsAppResolved } from "./whatsapp";
 
 if (location.origin === "https://web.whatsapp.com") {
   chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id || typeof message !== "object" || message === null ||
         !("protocol" in message) || message.protocol !== "wa-scribe.app" || !("type" in message) || message.type !== "inspect") return undefined;
-    sendResponse(inspectWhatsApp());
-    return undefined;
+    void inspectWhatsAppResolved().then(sendResponse).catch(() => sendResponse({ ok: false, reason: "WhatsApp identity lookup failed. Reload WhatsApp Web and try again." }));
+    return true;
   });
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== "wa-scribe.app" || port.sender?.id !== chrome.runtime.id) return;

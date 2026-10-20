@@ -1,6 +1,6 @@
 # Installable alpha: owner verification next
 
-The integrated source is on `codex/wa-scribe-complete`. For source `6745c9d` (0.1.2), TypeScript and all 93 unit tests passed on Node 24.22.0. The production ZIP includes that source. The owner's Chrome check is blocked by conversation-ID detection; update, reload WhatsApp and return the counts-only Identity diagnostic. Browser tests, CI and live export remain unverified.
+The integrated source is on `codex/wa-scribe-complete`. The 0.1.3 compatibility alpha resolves opaque rendered message IDs against native message primary keys without reading database message records. The owner's sanitized checks established a unique mapping for four visible messages; the updated extension still needs a Chrome retry. See [identity evidence and bounds](docs/reviews/OPAQUE-IDENTITY.md). `install/BUILD.txt` records the exact source and verification for the ZIP. Browser tests, CI and live export remain unverified.
 
 [Install the ZIP and configure Google Drive](docs/INSTALL.md). The panel can add the currently open WhatsApp conversation, select known chats, run bounded Download/Edit, stop, recover a staged Drive generation, start fresh, and delete owned export files after confirmation. Media with unverified originals remains explicitly unavailable. If stable account/chat identity is unavailable, the adapter pauses instead of guessing.
 

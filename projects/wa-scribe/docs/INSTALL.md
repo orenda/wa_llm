@@ -1,6 +1,6 @@
 # Install wa-scribe in Chrome
 
-This is an installable **0.1.2 diagnostic alpha**, not a verified v1 release. TypeScript checks and all 93 unit tests (18 files) passed on Node 24.22.0 for source commit `6745c9d`; the ZIP was rebuilt from that source. `BUILD.txt` inside the ZIP records this evidence. The owner's first Chrome check reached a conversation-ID detection failure despite visible messages. This build adds counts-only diagnostics for that failure; it does not claim the compatibility issue is fixed. Browser tests and live export remain unverified.
+This is an installable **0.1.3 compatibility alpha**, not a verified v1 release. It supports the opaque message IDs observed in the owner's WhatsApp page by resolving native message keys read-only. The owner's key-only checks established a unique mapping for four visible messages; the updated extension still needs a Chrome retry. `BUILD.txt` inside the ZIP records the exact source and TypeScript/unit/build results. Browser tests and live export remain unverified.
 
 ## Install the ZIP
 
@@ -8,13 +8,13 @@ This is an installable **0.1.2 diagnostic alpha**, not a verified v1 release. Ty
 2. Open `chrome://extensions`, turn on **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
 3. Open or reload [WhatsApp Web](https://web.whatsapp.com/), then click the wa-scribe extension icon to open its side panel. Chrome 116 or newer is required.
 
-To update an existing installation, back up its configured `manifest.json`, extract the new files into the same unpacked folder, and copy the old `oauth2` block into the new manifest before clicking **Reload**. Keep the new manifest's version and the existing public `key`. Do not remove/reinstall the extension or clear its storage. Confirm version 0.1.2 and source `6745c9d` in `BUILD.txt`, then reload WhatsApp Web. This preserves pending operations and registered chats.
+To update an existing installation, back up its configured `manifest.json`, extract the new files into the same unpacked folder, and copy the old `oauth2` block into the new manifest before clicking **Reload**. Keep the new manifest's version and the existing public `key`. Do not remove/reinstall the extension or clear its storage. Confirm version 0.1.3 in `BUILD.txt` and on `chrome://extensions`, then reload WhatsApp Web. This preserves pending operations and registered chats.
 
 ## If Add current chat cannot identify the conversation
 
-1. Update to 0.1.2 using the same unpacked folder and preserved OAuth block, then reload the extension and WhatsApp Web.
+1. Update to 0.1.3 using the same unpacked folder and preserved OAuth block, then reload the extension and WhatsApp Web.
 2. Open the normal conversation, wait for its messages to appear, and choose **Add current WhatsApp chat** again.
-3. If it fails, copy the error's **Identity diagnostic** line. It contains counts only: data-ID nodes, recognized rows, quoted rows, rejected formats, unsupported chat IDs, distinct conversations and message bubbles. It contains no raw IDs, phone numbers, message text or names.
+3. If it fails, copy the visible error. An **Identity diagnostic** line contains counts, fixed format labels and booleans only; it contains no raw IDs, phone numbers, message text or names. Local-key lookup errors describe unsupported schema, missing/ambiguous identity, limits or a page change.
 
 These counts distinguish an unrecognized message structure from multiple conversation IDs. Do not send the page's HTML or raw message IDs; no identity is guessed from a chat name or message text.
 
@@ -65,7 +65,9 @@ You can register several chats. A pass freezes the selected set; each selected c
 
 ## Current media and source limitations
 
-The real DOM adapter reads only the verified open `#main` conversation. It uses message `data-id` values and the nonsecret `last-wid`/`last-wid-md` account identifiers. It does not access WhatsApp credentials, private application modules or private endpoints. If this WhatsApp version does not expose those identities, it pauses rather than using a name or timestamp as identity.
+Message bodies come only from the verified open `#main` conversation. Identity uses message `data-id` values and the nonsecret `last-wid`/`last-wid-md` account identifiers. For opaque 20/32-character hex IDs, the adapter reads a complete, bounded snapshot of primary keys from `model-storage` version 2070, store `message`, using a read-only transaction. These keys include conversation identifiers across the local database; message records and bodies are never read from it or exported. Each rendered batch needs a unique exact match to one full message key per ID and one conversation. Missing/ambiguous keys, unsupported schema and context changes stop the lookup. No name, text or timestamp is used to guess identity.
+
+The key snapshot is limited to 100,000 keys, 4 MiB of UTF-8 keys, 4,096 characters per key and five seconds per lookup. Key/byte limits can pause large accounts. The browser buffers the count-bounded snapshot before byte validation. Unrelated unknown string keys are ignored only when they contain none of the requested IDs; unknown keys containing a requested ID stop the lookup. Alternate encodings are unsupported. See [the identity evidence](reviews/OPAQUE-IDENTITY.md). The adapter does not access WhatsApp credentials, private application modules or private endpoints.
 
 Visible captions/quotes are retained. **This alpha does not automatically download media originals.** Images, audio, video, documents and unsupported envelopes carry explicit unavailable/unsupported markers when original provenance/completeness cannot be established. Thumbnails are not claimed as originals, and view-once controls are never opened. Later media support needs live capability evidence for each kind.
 

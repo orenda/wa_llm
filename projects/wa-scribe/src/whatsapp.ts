@@ -1,5 +1,6 @@
 import type { ObservedMessage } from "./download";
 import type { AttachmentSlot } from "./model";
+import { resolveLocalMessageKeys, type LocalMessageKey } from "./local-identity";
 
 export type OpenChat = { accountId: string; chatId: string; name: string };
 export type CollectedChat = {
@@ -11,7 +12,8 @@ export type CollectedChat = {
   deletedIds: string[];
 };
 
-type MessageKey = { id: string; chatId: string; outgoing: boolean; senderId: string | null };
+type MessageKey = LocalMessageKey;
+type Inspection = { ok: true; chat: OpenChat; rendered: number } | { ok: false; reason: string };
 const MESSAGE_ID = /^(true|false)_([^_]+)_([^\s]+)$/;
 const JID = /^\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)$/;
 const ACCOUNT_JID = /^\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net)$/;
@@ -34,18 +36,20 @@ function accountId(): string | null {
   return identities.size === 1 ? [...identities][0] ?? null : null;
 }
 
-function messageKey(row: Element): MessageKey | null {
+function messageKey(row: Element, resolved?: ReadonlyMap<string, MessageKey>): MessageKey | null {
   const id = row.getAttribute("data-id") ?? "";
+  const local = resolved?.get(id);
+  if (local) return local;
   const match = MESSAGE_ID.exec(id);
   if (!match?.[2] || !JID.test(match[2]) || !match[3]) return null;
   const sender = /_(\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net))$/.exec(match[3]);
   return { id, chatId: match[2], outgoing: match[1] === "true", senderId: sender?.[1] ?? null };
 }
 
-function messageRows(main: Element): HTMLElement[] {
+function messageRows(main: Element, resolved?: ReadonlyMap<string, MessageKey>): HTMLElement[] {
   const seen = new Set<string>();
   return Array.from(main.querySelectorAll<HTMLElement>("[data-id]")).filter((row) => {
-    const key = messageKey(row);
+    const key = messageKey(row, resolved);
     if (row.closest("[data-testid='quoted-message']") || !key || seen.has(key.id)) return false;
     seen.add(key.id);
     return true;
@@ -86,13 +90,12 @@ function identityDiagnostic(main: Element, recognizedRows: number, conversationI
     structures: [...structures.values()] };
 }
 
-export function inspectWhatsApp(): { ok: true; chat: OpenChat; rendered: number } | { ok: false; reason: string } {
-  const main = document.querySelector<HTMLElement>("#main");
+function inspect(main: HTMLElement | null, resolved?: ReadonlyMap<string, MessageKey>): Inspection {
   if (!main || document.querySelectorAll("#main").length !== 1) return { ok: false, reason: "Open a WhatsApp conversation first." };
   const account = accountId();
   if (!account) return { ok: false, reason: "WhatsApp did not expose a verifiable account ID. Sign in and reload WhatsApp Web." };
-  const rows = messageRows(main);
-  const ids = new Set(rows.map((row) => messageKey(row)?.chatId).filter((id): id is string => id !== undefined));
+  const rows = messageRows(main, resolved);
+  const ids = new Set(rows.map((row) => messageKey(row, resolved)?.chatId).filter((id): id is string => id !== undefined));
   if (ids.size !== 1) {
     const reason = ids.size === 0 ? "No supported message-based conversation ID was found in the open chat." : "The open chat contains multiple message-based conversation IDs.";
     return { ok: false, reason: `${reason} Identity diagnostic: ${JSON.stringify(identityDiagnostic(main, rows.length, ids.size))}` };
@@ -101,6 +104,61 @@ export function inspectWhatsApp(): { ok: true; chat: OpenChat; rendered: number 
   if (!chatId) return { ok: false, reason: "No stable conversation ID is available." };
   const header = main.querySelector<HTMLElement>("header span[title], header [data-testid='conversation-info-header-chat-title']");
   return { ok: true, chat: { accountId: account, chatId, name: header?.getAttribute("title") || header?.textContent || chatId }, rendered: rows.length };
+}
+
+export function inspectWhatsApp(): Inspection {
+  return inspect(document.querySelector<HTMLElement>("#main"));
+}
+
+function rowSignature(main: HTMLElement): string {
+  return JSON.stringify(Array.from(main.querySelectorAll("[data-id]"), (row) => row.getAttribute("data-id")));
+}
+
+// Selection is a change detector only; durable identity always comes from full message keys.
+function watchContext(main: HTMLElement, freezeRows = false) {
+  const account = accountId(), sidebar = document.querySelector("#pane-side");
+  const selected = () => Array.from(document.querySelectorAll("#pane-side [aria-selected='true'], #pane-side [data-selected='true']"));
+  const selection = selected();
+  const originalIds = freezeRows ? rowSignature(main) : null;
+  let changed = false;
+  const observer = new MutationObserver(() => { changed = true; });
+  if (sidebar) observer.observe(sidebar, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "data-selected"] });
+  return {
+    current: () => {
+      if (observer.takeRecords().length) changed = true;
+      const current = selected();
+      return !changed && document.querySelector("#main") === main && document.querySelectorAll("#main").length === 1 &&
+        document.querySelector("#pane-side") === sidebar && accountId() === account &&
+        current.length === selection.length && current.every((node, index) => node === selection[index]) &&
+        (originalIds === null || rowSignature(main) === originalIds);
+    },
+    close: () => observer.disconnect(),
+  };
+}
+
+async function resolveWindow(main: HTMLElement, signal?: AbortSignal) {
+  const context = watchContext(main, true);
+  const keys = new Map<string, MessageKey>();
+  try {
+    const opaque = Array.from(main.querySelectorAll("[data-id]"))
+      .filter((row) => !row.closest("[data-testid='quoted-message']"))
+      .map((row) => row.getAttribute("data-id") ?? "").filter((id) => /^(?:[0-9a-f]{20}|[0-9a-f]{32})$/i.test(id));
+    if (opaque.length) {
+      const local = await resolveLocalMessageKeys(opaque, signal);
+      if (!local.ok) return { ok: false as const, reason: local.reason };
+      for (const [raw, key] of local.keys) keys.set(raw, key);
+    }
+    if (signal?.aborted || !context.current()) return { ok: false as const, reason: "The WhatsApp account, conversation or rendered messages changed during identity lookup. Try again with the chat left open." };
+    const result = inspect(main, keys);
+    return result.ok ? { ...result, keys } : result;
+  } finally { context.close(); }
+}
+
+export async function inspectWhatsAppResolved(): Promise<Inspection> {
+  const main = document.querySelector<HTMLElement>("#main");
+  if (!main || !accountId()) return inspectWhatsApp();
+  const result = await resolveWindow(main);
+  return result.ok ? { ok: true, chat: result.chat, rendered: result.rendered } : result;
 }
 
 function bodyText(node: Node): string {
@@ -122,22 +180,24 @@ function attachmentMarkers(row: Element): AttachmentSlot[] {
   return outer.slice(0, 32).map((_, index): AttachmentSlot => ({ slot: index + 1, attachment: { state: "unavailable", limitation: "This rendered attachment has no verified original bytes. It was not downloaded." } }));
 }
 
-function readWindow(main: HTMLElement, expected: OpenChat): { messages: ObservedMessage[]; deletedIds: string[]; limitation: string | null } {
-  const current = inspectWhatsApp();
+async function readWindow(main: HTMLElement, expected: OpenChat, signal?: AbortSignal): Promise<{ messages: ObservedMessage[]; deletedIds: string[]; limitation: string | null; binding: string }> {
+  const current = await resolveWindow(main, signal);
   if (!current.ok || document.querySelector("#main") !== main || current.chat.accountId !== expected.accountId || current.chat.chatId !== expected.chatId) {
     throw new Error("The WhatsApp account or selected conversation changed. Collection stopped before mixing content.");
   }
   const messages: ObservedMessage[] = [];
   const deletedIds: string[] = [];
   let limitation: string | null = null;
-  for (const bubble of Array.from(main.querySelectorAll(".message-in, .message-out"))) {
+  for (const bubble of Array.from(main.querySelectorAll(".message-in, .message-out, [data-pre-plain-text]"))) {
+    if (bubble.closest("[data-testid='quoted-message']")) continue;
     const keyed = bubble.closest("[data-id]") ?? bubble.querySelector("[data-id]");
-    if (!keyed || !main.contains(keyed) || !messageKey(keyed)) limitation = "unidentified-message";
+    if (!keyed || !main.contains(keyed) || !messageKey(keyed, current.keys)) limitation = "unidentified-message";
   }
-  for (const row of messageRows(main)) {
-    const key = messageKey(row);
+  for (const row of messageRows(main, current.keys)) {
+    const key = messageKey(row, current.keys);
     if (!key || key.chatId !== expected.chatId) throw new Error("A rendered message belongs to another chat.");
-    const copyable = row.querySelector<HTMLElement>(".copyable-text[data-pre-plain-text]");
+    const copyable = (row.matches("[data-pre-plain-text]") ? [row] : Array.from(row.querySelectorAll<HTMLElement>("[data-pre-plain-text]")))
+      .find((node) => !node.closest("[data-testid='quoted-message']"));
     const pre = copyable?.getAttribute("data-pre-plain-text") ?? "";
     const match = /^\[([^\]]+)\]\s*(.*):\s*$/su.exec(pre);
     const deleted = Array.from(row.querySelectorAll("[data-icon='recalled'], [data-icon='recalled-out'], [data-testid='recalled']")).some((node) => !node.closest("[data-testid='quoted-message']"));
@@ -164,7 +224,7 @@ function readWindow(main: HTMLElement, expected: OpenChat): { messages: Observed
       sourceBaseline: JSON.stringify({ text, attachments, deleted }),
     });
   }
-  return { messages, deletedIds, limitation };
+  return { messages, deletedIds, limitation, binding: rowSignature(main) };
 }
 
 /** Join only when observed windows give one unambiguous ordering. */
@@ -193,7 +253,7 @@ function joinWindows(saved: ObservedMessage[], observed: ObservedMessage[]): Obs
 }
 
 function scrollContainer(main: HTMLElement): HTMLElement | null {
-  const sample = messageRows(main)[0];
+  const sample = Array.from(main.querySelectorAll<HTMLElement>("[data-pre-plain-text]")).find((node) => !node.closest("[data-testid='quoted-message']")) ?? messageRows(main)[0];
   for (let node = sample?.parentElement; node && main.contains(node); node = node.parentElement) {
     if (node.scrollHeight > node.clientHeight + 20 && /auto|scroll/.test(getComputedStyle(node).overflowY)) return node;
   }
@@ -222,13 +282,18 @@ export async function collectWhatsApp(input: {
   const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Math.floor(input.limit), 1), 500) : 500;
   const deadline = Date.now() + (Number.isFinite(input.maxMs) ? Math.min(Math.max(input.maxMs, 1_000), 60_000) : 24_000);
   const scroller = scrollContainer(main), originalTop = scroller?.scrollTop;
+  const context = watchContext(main);
   let messages: ObservedMessage[] = [], deletedIds: string[] = [], upperId: string | null = null;
+  let verifiedRows: string | null = null;
   let stopReason = input.scope === "visible" ? "visible-window" : "history-boundary-unverified";
   let contiguous = true, idle = 0;
   try {
     while (true) {
       if (input.signal?.aborted) { stopReason = "stopped"; break; }
-      const window = readWindow(main, input.expected);
+      if (!context.current()) throw new Error("The selected WhatsApp conversation changed.");
+      const window = await readWindow(main, input.expected, input.signal);
+      if (!context.current()) throw new Error("The selected WhatsApp conversation changed.");
+      verifiedRows = window.binding;
       if (upperId === null) upperId = window.messages.at(-1)?.id ?? null;
       const cutoff = window.messages.findIndex((message) => message.id === upperId);
       const observed = cutoff >= 0 ? window.messages.slice(0, cutoff + 1) : window.messages;
@@ -258,9 +323,8 @@ export async function collectWhatsApp(input: {
       await wait(450, input.signal);
     }
   } finally {
-    const current = inspectWhatsApp();
-    if (scroller && originalTop !== undefined && document.querySelector("#main") === main && current.ok &&
-        current.chat.accountId === input.expected.accountId && current.chat.chatId === input.expected.chatId) scroller.scrollTop = originalTop;
+    if (scroller && originalTop !== undefined && context.current() && rowSignature(main) === verifiedRows) scroller.scrollTop = originalTop;
+    context.close();
   }
   const kept = new Set(messages.map((message) => message.id));
   return { chat: input.expected, messages, order: "verified", contiguous, stopReason, deletedIds: deletedIds.filter((id) => kept.has(id)) };
