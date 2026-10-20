@@ -8,6 +8,8 @@ This is an installable **0.1.4 UI alpha**, not a verified v1 release. Chat check
 2. Open `chrome://extensions`, turn on **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
 3. Open or reload [WhatsApp Web](https://web.whatsapp.com/), then click the wa-scribe extension icon to open its side panel. Chrome 116 or newer is required.
 
+For an existing **0.1.3** installation, the [UI-only update ZIP](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/install/wa-scribe-ui-update.zip?raw=true) replaces just `panel.html` and `panel.js`. Extract it over the same unpacked folder, click Reload at `chrome://extensions`, and reload WhatsApp Web. It preserves your configured manifest, Google connection and stored exports. Chrome will still show manifest version 0.1.3; the new panel says **Added chats** and has **Sync settings** and **More actions**. This updates the panel only.
+
 To update an existing installation, back up its configured `manifest.json`, extract the new files into the same unpacked folder, and copy the old `oauth2` block into the new manifest before clicking **Reload**. Keep the new manifest's version and the existing public `key`. Do not remove/reinstall the extension or clear its storage. Confirm version 0.1.4 in `BUILD.txt` and on `chrome://extensions`, then reload WhatsApp Web. This preserves pending operations and added chats. A release packaged with the app's public OAuth client ID can eliminate the manual OAuth-copy step.
 
 ## If Add current chat cannot identify the conversation

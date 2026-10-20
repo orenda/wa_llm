@@ -1,11 +1,13 @@
-wa-scribe 0.1.3 compatibility alpha
-Source commit: 77e89fa7f162147d9ca36be23d39ca84b5daebdb
+wa-scribe 0.1.4 UI alpha
+Runtime source commit: 13f0267f2bd87d794342cc08cfa5eb74bf6b9c71
 Node: 24.22.0
 TypeScript checks: passed
-Unit tests: 119 passed, 20 files
 Production build: passed
-Browser tests: unrun; synthetic native-IndexedDB regression provided in source
+Unit tests: not run for this UI change
+Browser tests: not run; panel expectation updated for owner execution
 Remote CI: not run
-Owner Chrome: four sampled opaque IDs uniquely matched native message keys
-Updated extension on real WhatsApp: awaiting owner retry
-Live Google consent and Drive export: unverified
+Agent live Google/WhatsApp operations: none
+Owner preceding Chrome evidence: connected Drive; added chat; partial saved export
+Current limits: added/open chats only; no original attachment export
+Google app public client ID: absent from generic ZIP; owner configuration required
+UI-only update ZIP: panel files only; preserves existing 0.1.3 manifest/OAuth
