@@ -1,5 +1,5 @@
 wa-scribe local macOS capability prototype 0.0.1
-Runtime source commit: f81e6858b2c6c6b6d0b825d04e9ea0680ce6bdbc
+Runtime source commit: 0321664e8ea6b1454cdbf91688f1db9c3803b1bb
 Build host: Linux; build Node.js: 24.22.0
 Accepted runtime: macOS with stable Node.js 24.x or 26.x
 TypeScript checks (source and tests): passed
@@ -25,3 +25,6 @@ PDF viewers: known iframe/preview cleanup before navigation and after attachment
 Native originals: direct tiles and recognized PDF Download controls retain identity/hash/size checks; late download cleanup is serialized
 Chat results: first attachment limitation shown; Playwright ANSI and call logs omitted from displayed errors
 PDF regression coverage: direct tile, preview bytes, cleanup/failure, next chat, Stop, unrelated dialogs; written, not run
+Loaded off-screen attachments: bounded scroll into view with source identity/original metadata rechecks before capture
+Results distinguish loaded messages, attachments found, and files saved; older history is not searched
+Off-screen attachment regressions: above/below viewport and row recycling/deletion; written, not run
