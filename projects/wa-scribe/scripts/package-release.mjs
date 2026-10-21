@@ -39,8 +39,9 @@ try {
   fail(`${distDir} is missing. Run npm run build first. This script does not publish.`);
 }
 
-if (!names.some((path) => relative(distDir, path) === "manifest.json")) {
-  fail("manifest.json is missing. Run npm run build first. This script does not publish.");
+const manifestPath = names.find((path) => relative(distDir, path) === "manifest.json");
+if (!manifestPath && !names.some((path) => relative(distDir, path).replaceAll("\\", "/") === "local-dist/main.mjs")) {
+  fail("manifest.json or local-dist/main.mjs is missing. Build the extension or local app first. This script does not publish.");
 }
 
 const refused = names.find((path) => {
@@ -49,7 +50,7 @@ const refused = names.find((path) => {
 });
 if (refused) fail(`refused to pack ${relative(distDir, refused)}`);
 
-const manifest = readFileSync(join(distDir, "manifest.json"), "utf8");
+const manifest = manifestPath ? readFileSync(manifestPath, "utf8") : "";
 if (manifest.includes("client_secret")) fail("manifest contains client_secret");
 
 const stamp = new Date();
@@ -81,7 +82,7 @@ for (const path of names) {
   locals.push(local);
   centrals.push(Buffer.concat([
     u32(0x02014b50),
-    u16(20),
+    u16((3 << 8) | 20),
     u16(20),
     u16(0),
     u16(0),
@@ -95,7 +96,7 @@ for (const path of names) {
     u16(0),
     u16(0),
     u16(0),
-    u32(0),
+    u32((statSync(path).mode & 0xffff) << 16),
     u32(offset),
     name,
   ]));

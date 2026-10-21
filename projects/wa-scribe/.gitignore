@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-test/
+local-dist/
+local-macos/staging/
 release/
 coverage/
 playwright-report/

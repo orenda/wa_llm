@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:;">
+    <title>wa-scribe · Local panel</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #20242a;
+        background: #f5f6f8;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 18px; }
+      main { max-width: 760px; margin: 0 auto; }
+      header { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      h1 { margin: 0; font-size: 19px; line-height: 1.25; }
+      .tag { color: #5d6672; font-size: 11px; white-space: nowrap; }
+      .card { background: #fff; border: 1px solid #dce0e5; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+      .toolbar, .folder-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .folder-row { justify-content: space-between; }
+      .folder-title { font-weight: 600; }
+      #output-path { margin-top: 3px; color: #606a75; overflow-wrap: anywhere; }
+      button { font: inherit; color: #20242a; background: #fff; border: 1px solid #cbd1d8; border-radius: 5px; padding: 6px 10px; cursor: pointer; }
+      button:hover:not(:disabled) { background: #f0f3f6; }
+      button.primary { color: #fff; background: #176b45; border-color: #176b45; }
+      button.primary:hover:not(:disabled) { background: #105638; }
+      button:disabled { opacity: .5; cursor: default; }
+      input[type="search"] { flex: 1 1 180px; min-width: 130px; font: inherit; border: 1px solid #cbd1d8; border-radius: 5px; padding: 7px 9px; }
+      #chat-list { margin: 12px 0 0; padding: 0; list-style: none; border-top: 1px solid #eceef1; }
+      .chat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px 0; border-bottom: 1px solid #eceef1; }
+      .chat-main { min-width: 0; }
+      .chat-label { display: flex; align-items: center; gap: 8px; font-weight: 550; overflow-wrap: anywhere; }
+      .chat-result { color: #606a75; margin: 4px 0 0 24px; overflow-wrap: anywhere; }
+      .chat-actions { display: flex; gap: 6px; align-items: start; }
+      .chat-actions button { padding: 4px 8px; font-size: 12px; }
+      .muted { color: #66717c; }
+      .hint { margin: 10px 0 0; color: #606a75; }
+      #status { margin: 0 0 10px; font-weight: 600; }
+      #error { color: #a12727; margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+      #empty { color: #66717c; padding: 14px 0 2px; }
+      @media (max-width: 520px) {
+        body { padding: 12px; }
+        .chat-row { grid-template-columns: minmax(0, 1fr); }
+        .chat-actions { margin-left: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>wa-scribe</h1>
+          <div class="tag">Local macOS prototype</div>
+        </div>
+        <div id="job-indicator" class="tag" aria-live="polite">Starting…</div>
+      </header>
+
+      <section class="card" aria-label="Chats">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Search chats" aria-label="Search chats">
+          <button id="refresh">Refresh chats</button>
+          <button id="sync" class="primary">Sync selected</button>
+          <button id="stop">Stop</button>
+        </div>
+        <p class="hint">Sign in by scanning the QR code in the separate WhatsApp window. Sync saves rendered chat content and attachments up to 8 MiB.</p>
+        <ul id="chat-list" aria-live="polite"></ul>
+        <div id="empty" hidden>No chats loaded yet. Choose Refresh chats to load them.</div>
+      </section>
+
+      <section class="card" aria-label="Output folder and status">
+        <div class="folder-row">
+          <div>
+            <div class="folder-title">Output folder</div>
+            <div id="output-path" class="muted"></div>
+          </div>
+          <div class="toolbar">
+            <button id="change-folder">Change</button>
+            <button id="open-folder">Open</button>
+          </div>
+        </div>
+        <p id="status" aria-live="polite">Loading status…</p>
+        <p id="error" role="alert" hidden></p>
+      </section>
+    </main>
+    <script src="panel.js" defer></script>
+  </body>
+</html>

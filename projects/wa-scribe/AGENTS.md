@@ -1,5 +1,7 @@
 # Instructions for coding agents
 
+Current direction: the local macOS Chromium capability prototype in `local/`, with local files only. Follow [LOCAL_MAC.md](docs/LOCAL_MAC.md) for its active scope. The extension backlog below records the earlier architecture; its identity, preservation and recovery rules still apply, but it does not require adding Drive or extension UI to the local runner.
+
 ## Assignment and ownership
 
 Implement only the assigned ticket. Start with its listed dependencies and acceptance criteria in [docs/BACKLOG.md](docs/BACKLOG.md). The coordinating agent owns architecture decisions, ticket acceptance, and code reviews. Do not self-approve, merge, publish, or start the next dependent ticket without its review result.

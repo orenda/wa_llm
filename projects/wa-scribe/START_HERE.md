@@ -1,13 +1,9 @@
-# Installable alpha: owner verification next
+# Local Mac capability prototype
 
-The 0.1.6 alpha is packaged in [`install/wa-scribe.zip`](install/wa-scribe.zip). Install it from [INSTALL.md](docs/INSTALL.md). Standard setup is Install → Connect Google Drive → approve Google's consent screen; users do not edit `manifest.json` or register an OAuth client.
+Start with [LOCAL_MAC.md](docs/LOCAL_MAC.md). The current workflow is a dedicated Chromium browser and local files only. The historical Chrome extension is no longer the active development path.
 
-The panel searches a cached catalogue of up to 5,000 chats. Select chats with checkboxes and Sync; wa-scribe opens selected chats through WhatsApp's normal navigation and verifies canonical account/chat IDs before collection. Ambiguity pauses the affected chat; user interaction with WhatsApp stops the job. Navigation can mark chats read.
+Install Node.js 24.22.0, extract `local-macos/wa-scribe-local-macos.zip`, and double-click `Start wa-scribe.command`. Link WhatsApp by QR in its browser tab, then use the chat checklist in the wa-scribe tab. Exports default to `~/Documents/wa-scribe`; each chat has Open folder.
 
-The 0.1.6 navigation repair activates the matching label's down/click handlers and preserves registered native names when catalogue labels are missing. Its regressions include a different initially open conversation and rejection of a same-title destination with a different ID. They are written for owner execution, not reported as passing.
+Before increasing scope, the owner must check automatic switching between two chats, a photo and PDF, repeat Sync, Stop, Recover and restarting the saved browser profile. This bounded prototype captures up to 50 rendered messages and 8 MiB per original file. It has not been verified against the owner's Mac/WhatsApp session. Build/source evidence is in `local-macos/BUILD.txt`.
 
-Images, PDFs and other original attachments use WhatsApp's normal Download command, with raw bytes checked against the selected message's native plaintext file hash. Inspect the downloaded export folder locally: it contains `transcript.md`, `sync.json`, and immutable media copies with relative Markdown links. Links work in a locally downloaded copy; Drive's web viewer is not promised to resolve them.
-
-Pilot two low-sensitivity chats, including one with a photo and one with a PDF smaller than 8 MiB. Inspect the media, repeat Sync, and exercise Stop and recovery. Typecheck and the production build passed on Node 24.22.0; tests were left for the owner. `install/BUILD.txt` records the package source. Live Google/WhatsApp compatibility is unverified for this version.
-
-Do not use the old UI-only update ZIP. It is incompatible with the current media-capable source. Update by extracting the full ZIP into the same unpacked folder, clicking Reload on `chrome://extensions`, and reloading WhatsApp Web. Keep the stable extension ID and existing Chrome extension storage; never remove the extension or reset storage as an update or recovery step.
+Previous extension files, journals and Drive exports remain untouched. New local exports use their own bindings and immutable generations. Do not reset a profile or discard a pending save to troubleshoot collection.

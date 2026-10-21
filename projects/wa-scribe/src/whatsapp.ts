@@ -169,7 +169,7 @@ function bodyText(node: Node): string {
   return node instanceof HTMLDivElement && node.nextSibling ? `${children}\n` : children;
 }
 
-function messageText(row: HTMLElement): string {
+export function messageText(row: HTMLElement): string {
   const parts = Array.from(row.querySelectorAll<HTMLElement>(".selectable-text"))
     .filter((node) => !node.parentElement?.closest(".selectable-text") && !node.closest("[data-testid='quoted-message']"));
   const quote = row.querySelector<HTMLElement>("[data-testid='quoted-message']");

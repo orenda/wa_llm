@@ -10,7 +10,10 @@
     "typecheck": "node scripts/assert-node.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "test:unit": "node scripts/assert-node.mjs && vitest run",
     "test:browser": "node scripts/assert-node.mjs && node scripts/build.mjs production && node scripts/build.mjs test && playwright test",
-    "build": "node scripts/assert-node.mjs && node scripts/build.mjs production"
+    "build": "node scripts/assert-node.mjs && node scripts/build.mjs production",
+    "local:build": "node scripts/assert-node.mjs && node scripts/build-local.mjs",
+    "local": "node scripts/assert-node.mjs && node local-dist/main.mjs",
+    "test:local": "npm run local:build && playwright test --config local/playwright.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

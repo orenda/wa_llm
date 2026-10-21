@@ -15,5 +15,5 @@
     "types": ["chrome", "node"],
     "rootDir": "."
   },
-  "include": ["src", "vite.config.ts", "playwright.config.ts", "vitest.config.ts"]
+  "include": ["src", "local", "vite.config.ts", "playwright.config.ts", "vitest.config.ts"]
 }
