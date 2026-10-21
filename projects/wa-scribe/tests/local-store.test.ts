@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createStore, type LocalStore } from "../local/store";
 import type { ObservedMessage } from "../src/download";
@@ -10,6 +10,7 @@ import type { CollectedChat, OpenChat } from "../src/whatsapp";
 
 const expected: OpenChat = { accountId: "15551234567@c.us", chatId: "120363000000000000@g.us", name: "Class 3A" };
 const chatKey = createHash("sha256").update(JSON.stringify([expected.accountId, expected.chatId])).digest("hex").slice(0, 16);
+const chatFolder = (chat: OpenChat) => `${chat.name}--${createHash("sha256").update(JSON.stringify([chat.accountId, chat.chatId])).digest("hex").slice(0, 16)}`;
 const cleanup: { output: string; store: LocalStore }[] = [];
 
 function observed(id: string, attachments: AttachmentSlot[] = []): ObservedMessage {
@@ -28,7 +29,7 @@ async function setup(hooks?: Parameters<typeof createStore>[1]) {
   const output = await mkdtemp(join(tmpdir(), "wa-scribe-store-"));
   const store = await createStore(output, hooks);
   cleanup.push({ output, store });
-  return { output, root: join(output, chatKey), store };
+  return { output, root: join(output, chatFolder(expected)), store };
 }
 
 afterEach(async () => {
@@ -40,6 +41,117 @@ afterEach(async () => {
 });
 
 describe("local filesystem store", () => {
+  it("uses readable Unicode names, sanitizes unsafe characters, and caps the label by UTF-8 bytes", async () => {
+    const output = await mkdtemp(join(tmpdir(), "wa-scribe-store-names-"));
+    const store = await createStore(output);
+    cleanup.push({ output, store });
+    const hebrew: OpenChat = { ...expected, name: "כיתה 🧪" };
+    expect(basename(await store.folder(hebrew))).toBe(chatFolder(hebrew));
+
+    const sanitized: OpenChat = { ...expected, chatId: `${expected.chatId}-safe`, name: "..A:/B\\C\u202E*? .." };
+    const sanitizedFolder = basename(await store.folder(sanitized));
+    expect(sanitizedFolder).toBe(chatFolder({ ...sanitized, name: "A B C" }));
+    expect(/[<>:"\/\\|?*\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(sanitizedFolder)).toBe(false);
+
+    const empty: OpenChat = { ...expected, chatId: `${expected.chatId}-empty`, name: "<>:\"/\\|?*\u0001\u202e" };
+    expect(basename(await store.folder(empty))).toBe(chatFolder({ ...empty, name: "Chat" }));
+
+    const longName: OpenChat = { ...expected, chatId: `${expected.chatId}-long`, name: "🧪".repeat(80) };
+    const leaf = basename(await store.folder(longName));
+    const label = leaf.slice(0, -(2 + 16));
+    expect(leaf.endsWith(`--${createHash("sha256").update(JSON.stringify([longName.accountId, longName.chatId])).digest("hex").slice(0, 16)}`)).toBe(true);
+    expect(Buffer.byteLength(label)).toBeLessThanOrEqual(120);
+    expect(Buffer.from(label).toString("utf8")).toBe(label);
+  });
+
+  it("keeps same-named chats distinct and reuses a folder after the display name changes", async () => {
+    const { output, store } = await setup();
+    const original = await store.folder(expected);
+    const other: OpenChat = { ...expected, chatId: `${expected.chatId}-other` };
+    const otherFolder = await store.folder(other);
+    expect(basename(original)).toBe(`Class 3A--${chatKey}`);
+    expect(basename(otherFolder)).toBe(chatFolder(other));
+    expect(otherFolder).not.toBe(original);
+
+    const renamed: OpenChat = { ...expected, name: "Renamed class" };
+    expect(await store.folder(renamed)).toBe(original);
+    await store.preflight(renamed);
+    expect(await store.folder(renamed)).toBe(original);
+    expect(await readdir(output)).toContain(basename(original));
+    expect(await readdir(output)).not.toContain(chatFolder(renamed));
+  });
+
+  it("migrates a valid legacy folder before recovering its current and pending generations", async () => {
+    let stop = false;
+    const { output, root, store } = await setup({ checkpoint: async (phase) => {
+      if (stop && phase === "journal") throw new Error("stop after journal");
+    } });
+    await store.preflight(expected);
+    await store.commit(expected, collected());
+    const currentBefore = await readFile(join(root, "CURRENT"), "utf8");
+    const generationsBefore = await readdir(join(root, "generations"));
+    await store.preflight(expected);
+    stop = true;
+    await expect(store.commit(expected, collected([observed("m40"), observed("m42"), observed("m43")]))).rejects.toThrow("stop after journal");
+    const pendingBefore = await readFile(join(root, "pending.json"), "utf8");
+    await store.close();
+
+    const legacy = join(output, chatKey);
+    await rename(root, legacy);
+    const reopened = await createStore(output);
+    cleanup[cleanup.length - 1] = { output, store: reopened };
+    await reopened.recover(expected);
+    const migrated = join(output, chatFolder(expected));
+    expect(await readFile(join(migrated, "CURRENT"), "utf8")).not.toBe(currentBefore);
+    await expect(readFile(join(migrated, "pending.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readdir(join(migrated, "generations"))).toHaveLength(generationsBefore.length + 1);
+    expect((await reopened.preflight(expected)).chat?.messages.map(({ id }) => id)).toEqual(["m40", "m42", "m43"]);
+    expect(await readdir(output)).not.toContain(chatKey);
+    expect(pendingBefore).toContain("m43");
+  });
+
+  it("refuses duplicate named and legacy candidates without moving either", async () => {
+    const { output, root, store } = await setup();
+    await store.preflight(expected);
+    const legacy = join(output, chatKey);
+    await mkdir(legacy);
+    await writeFile(join(legacy, "keep.txt"), "preserve");
+    await expect(store.preflight(expected)).rejects.toThrow();
+    expect(await readFile(join(legacy, "keep.txt"), "utf8")).toBe("preserve");
+    expect(await readFile(join(root, "binding.json"), "utf8")).toContain(expected.chatId);
+    expect(await readdir(output)).toContain(chatKey);
+  });
+
+  it.each(["file", "symlink"] as const)("rejects a legacy %s candidate without following it", async (kind) => {
+    const { output, store } = await setup();
+    const legacy = join(output, chatKey);
+    const foreign = join(output, "foreign");
+    await mkdir(foreign);
+    await writeFile(join(foreign, "sentinel"), "keep");
+    if (kind === "file") await writeFile(legacy, "foreign file");
+    else await symlink(foreign, legacy, "dir");
+    await expect(store.preflight(expected)).rejects.toThrow();
+    expect(await readFile(join(foreign, "sentinel"), "utf8")).toBe("keep");
+    expect(await readdir(output)).toContain(chatKey);
+    await expect(readFile(join(output, chatFolder(expected), "binding.json"))).rejects.toThrow();
+  });
+
+  it.each(["missing", "invalid"] as const)("preserves a legacy folder with a %s binding", async (kind) => {
+    const { output, store } = await setup();
+    const legacy = join(output, chatKey);
+    await mkdir(legacy);
+    const binding = join(legacy, "binding.json"), keep = join(legacy, "keep.txt");
+    const raw = "{\"accountId\":\"someone-else\"}\n";
+    await writeFile(keep, "preserve");
+    if (kind === "invalid") await writeFile(binding, raw);
+    await expect(store.preflight(expected)).rejects.toThrow();
+    expect(await readFile(keep, "utf8")).toBe("preserve");
+    if (kind === "invalid") expect(await readFile(binding, "utf8")).toBe(raw);
+    else await expect(readFile(binding)).rejects.toThrow();
+    expect(await readdir(output)).toContain(chatKey);
+    await expect(readFile(join(output, chatFolder(expected), "binding.json"))).rejects.toThrow();
+  });
+
   it("publishes a coherent partial export and creates no generation for an identical repeat", async () => {
     const { root, store } = await setup();
     await store.preflight(expected);

@@ -33,6 +33,16 @@ function identity(expected: OpenChat): string {
   if (typeof expected.accountId !== "string" || !expected.accountId || typeof expected.chatId !== "string" || !expected.chatId || typeof expected.name !== "string") fail("Unverifiable account or chat identity.");
   return digest(JSON.stringify([expected.accountId, expected.chatId])).slice(0, 16);
 }
+function folderName(name: string, key: string): string {
+  const clean = name.normalize("NFC").replace(/[<>:"/\\|?*\p{Cc}\p{Zl}\p{Zp}\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, " ")
+    .replace(/\s+/gu, " ").replace(/^[. ]+|[. ]+$/gu, "");
+  let label = "";
+  for (const character of clean) {
+    if (Buffer.byteLength(label + character) > 120) break;
+    label += character;
+  }
+  return `${label.replace(/[. ]+$/u, "") || "Chat"}--${key}`;
+}
 async function directory(path: string, create = false): Promise<void> {
   if (create) { try { await mkdir(path); } catch (error) { if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error; } }
   const stat = await lstat(path);
@@ -94,7 +104,8 @@ function verifyPair(pending: Pending, binding: Binding): ChatExport {
   const chat = decode(pending.metadata, binding), parsed = parseTranscript(pending.markdown);
   if (!parsed.ok) fail("Pending transcript is invalid.");
   const encoded = encodeExport(parsed.value.prefix, chat);
-  if (!encoded.ok || encoded.value.markdown !== pending.markdown || encoded.value.metadata !== pending.metadata) fail("Pending transcript and metadata do not match.");
+  // Metadata is already validated above; JSON whitespace and field order need not match a re-encoding.
+  if (!encoded.ok || encoded.value.markdown !== pending.markdown) fail("Pending transcript and metadata do not match.");
   return chat;
 }
 
@@ -154,11 +165,14 @@ export async function createStore(output: string, hooks: Hooks = {}): Promise<Lo
     return next;
   };
   async function bound(expected: OpenChat): Promise<{ directory: string; binding: Binding }> {
-    const path = join(root, identity(expected));
+    const key = identity(expected), preferred = join(root, folderName(expected.name, key));
+    const candidates = (await readdir(root)).filter((name) => name === key || name.endsWith(`--${key}`));
+    if (candidates.length > 1) fail("Multiple local folders match this chat identity; all were preserved for review.");
+    let path = candidates[0] === undefined ? preferred : join(root, candidates[0]);
     await directory(path, true);
     let raw = await text(join(path, "binding.json"));
     if (raw === null) {
-      if ((await readdir(path)).length) fail("Chat directory has files but no binding; existing exports cannot be adopted.");
+      if (candidates.length || (await readdir(path)).length) fail("Chat directory has no binding; existing folders cannot be adopted.");
       const binding: Binding = { accountId: expected.accountId, chatId: expected.chatId, destinationId: randomUUID(), generation: randomUUID() };
       await immutable(join(path, "binding.json"), `${JSON.stringify(binding)}\n`);
       await syncDirectory(root);
@@ -167,6 +181,15 @@ export async function createStore(output: string, hooks: Hooks = {}): Promise<Lo
     const value: unknown = JSON.parse(raw);
     if (!record(value) || Object.keys(value).length !== 4 || value.accountId !== expected.accountId || value.chatId !== expected.chatId ||
         typeof value.destinationId !== "string" || !UUID.test(value.destinationId) || typeof value.generation !== "string" || !UUID.test(value.generation)) fail("Chat binding is invalid; existing exports cannot be adopted.");
+    if (candidates[0] === key) {
+      const target = await lstat(preferred).catch((error: unknown) => { if (missing(error)) return null; throw error; });
+      if (target !== null) fail("The named chat folder already exists; both folders were preserved.");
+      await directory(path);
+      if (await text(join(path, "binding.json")) !== raw) fail("Chat binding changed before folder migration; the existing folder was preserved.");
+      await rename(path, preferred);
+      await syncDirectory(root);
+      path = preferred;
+    }
     await directory(join(path, "generations"), true);
     return { directory: path, binding: { accountId: expected.accountId, chatId: expected.chatId, destinationId: value.destinationId, generation: value.generation } };
   }

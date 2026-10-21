@@ -20,7 +20,9 @@ Sync does not start automatically. **Stop** applies only when explicitly clicked
 
 ## Local files and recovery
 
-Each successful save creates an immutable export generation and updates a `CURRENT` pointer. If interrupted work leaves a pending journal, use the app's explicit recovery action and inspect its result before syncing again. Older generations remain on disk; remove them manually only after confirming which copy you want to keep. The app does not offer a discard or **Fresh** action.
+Each chat has a folder named from its readable WhatsApp chat name followed by `--` and a 16-character suffix derived from its account and chat IDs. Chats with the same visible name have separate folders, and existing folders are checked against their stored identity binding before reuse. Names retain Unicode, including Hebrew and emoji; unsafe filename characters are replaced, and long labels are shortened. A legacy folder named only with the ID suffix is renamed intact the next time wa-scribe accesses that chat's export. If WhatsApp later changes a chat's visible name, the existing folder keeps the label it was first given so saved paths stay stable.
+
+Inside a chat folder, `CURRENT` names the active immutable generation under `generations/`. That generation contains `transcript.md`, `sync.json`, and any saved original files; the app's **Open folder** button opens it directly. Older generations remain on disk; remove them manually only after confirming which copy you want to keep. If a sync is interrupted and there is no pending save, review the export and retry **Sync**. If a pending save exists, use the app's explicit **Recover** action and inspect its result before syncing again. The app does not offer a discard or **Fresh** action.
 
 If the app reports a lock after a crash, first verify that wa-scribe and its Chromium process are fully closed. Only then may you remove the stale `.wa-scribe.lock` directory from the export folder and relaunch. Do not remove a lock while an app process may still be running. Preserve `.staging` while any chat has a pending save; it holds bytes used by Recover.
 
