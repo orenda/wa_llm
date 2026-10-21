@@ -1,5 +1,5 @@
-wa-scribe 0.1.5 alpha
-Runtime source commit: 686b90281e2b91f226d1112e9ae394a15de6bb65
+wa-scribe 0.1.6 alpha
+Runtime source commit: 9737426d54c72a751afe6a27874bda4560a302c7
 Node: 24.22.0
 TypeScript checks (source and tests): passed
 Production build: passed
@@ -14,3 +14,5 @@ Original media: exact selected-message plaintext SHA-256 and optional size verif
 Media limits: 8 MiB/file, 32 MiB and 128 files/generation, 64 MiB local staging cache
 Source: rendered messages; local model-storage v2070 for identity/catalogue/selected media metadata
 Update: full ZIP into same unpacked folder; Reload extension and WhatsApp Web; keep storage
+Navigation repair: activate matching child label with mouse/pointer events; retain registered names when catalogue name is only an ID
+Added navigation regressions: source/unit/browser files written and typechecked, not executed
