@@ -51,9 +51,11 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function harness(initial: unknown, stopReason = "visible-window", loseCreate = false,
-  catalogEntries: { chatId: string; name: string; aliases: string[] }[] = []) {
+  catalogEntries: { chatId: string; name: string; aliases: string[] }[] = [],
+  sourceChat = { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" }) {
   let disk: unknown = structuredClone(initial);
   let collectStarts = 0;
+  const collectionRequests: unknown[] = [];
   const files = new Map<string, { meta: Record<string, unknown>; body: string }>();
   const owned = (id: string, parent: string | null, operation: string, mimeType = FOLDER) => ({
     id, parents: parent ? [parent] : [], mimeType, trashed: false,
@@ -114,9 +116,9 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
     tabs: {
       query: async () => [{ id: 1, url: "https://web.whatsapp.com/" }],
       sendMessage: async (_tabId: number, message: { type?: string }) => {
-        if (message.type === "account") return { ok: true, accountId: binding.accountId };
+        if (message.type === "account") return { ok: true, accountId: sourceChat.accountId };
         if (message.type === "catalog") return { ok: true, scope: "local-cache", accountId: WHATSAPP_ACCOUNT, chats: catalogEntries };
-        return { ok: true, chat: { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" } };
+        return { ok: true, chat: sourceChat };
       },
       connect: () => {
         let receive: (value: unknown) => void = () => undefined;
@@ -126,9 +128,9 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
           onDisconnect: { addListener: (listener: typeof disconnected) => { disconnected = listener; } },
           disconnect: () => disconnected(),
           postMessage: (message: { type?: string }) => {
-            if (message.type === "collect") collectStarts += 1;
+            if (message.type === "collect") { collectStarts += 1; collectionRequests.push(structuredClone(message)); }
             queueMicrotask(() => receive({ type: "result", value: {
-            chat: { accountId: binding.accountId, chatId: binding.chatId, name: "Chat" }, messages: observed,
+            chat: sourceChat, messages: observed,
             order: "verified", contiguous: true, stopReason, deletedIds: [],
           } }));
           },
@@ -136,7 +138,8 @@ function harness(initial: unknown, stopReason = "visible-window", loseCreate = f
       },
     },
   });
-  return { read: () => structuredClone(disk), files, allowCreates: () => { loseCreate = false; }, get collectStarts() { return collectStarts; } };
+  return { read: () => structuredClone(disk), files, collectionRequests,
+    allowCreates: () => { loseCreate = false; }, get collectStarts() { return collectStarts; } };
 }
 
 async function worker() {
@@ -304,6 +307,33 @@ describe("review regressions on the installed export path", () => {
     expect(persisted.chats[0]).toMatchObject({ chatId: catalogEntries[1]?.chatId, selected: true });
     const restored = await (await worker()).handleApp({ protocol: PROTOCOL, type: "state" });
     expect(restored.state.chats).toMatchObject([{ chatId: catalogEntries[1]?.chatId, selected: true, registered: true }]);
+  });
+
+  it("keeps a registered native label when the catalogue only supplies a lid ID", async () => {
+    const source = { accountId: WHATSAPP_ACCOUNT, chatId: "104427969073256@lid", name: "Known native title" };
+    const store = harness(seed({ ...source, current: null }), "visible-window", false,
+      [{ chatId: source.chatId, name: source.chatId, aliases: [] }], source);
+    const service = await worker();
+
+    const refreshed = await service.handleApp({ protocol: PROTOCOL, type: "discover" });
+    expect(refreshed.state.chats[0]?.name).toBe(source.name);
+    await sync(service);
+
+    expect(store.collectionRequests).toHaveLength(1);
+    expect(store.collectionRequests[0]).toMatchObject({ expected: source, navigationName: source.name });
+  });
+
+  it("refuses a stored label shared by another identity even if the catalogue has no such label", async () => {
+    const source = { accountId: WHATSAPP_ACCOUNT, chatId: "104427969073256@lid", name: "Shared name" };
+    const store = harness(seed({}, [chat({ ...source, current: null }), chat({ accountId: source.accountId,
+      chatId: "104427969073257@lid", name: source.name, key: "other-chat", selected: false, current: null })]),
+      "visible-window", false, [{ chatId: source.chatId, name: source.chatId, aliases: [] }], source);
+    const service = await worker();
+    await service.handleApp({ protocol: PROTOCOL, type: "discover" });
+
+    await sync(service);
+
+    expect(store.collectionRequests[0]).toMatchObject({ navigationName: null, aliases: [] });
   });
 });
 

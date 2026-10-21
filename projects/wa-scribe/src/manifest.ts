@@ -29,7 +29,7 @@ function shell(): ExtensionManifest {
   return {
     manifest_version: 3,
     name: "wa-scribe",
-    version: "0.1.5",
+    version: "0.1.6",
     description: "Export explicitly selected WhatsApp Web conversations to Markdown in your Google Drive.",
     minimum_chrome_version: "116",
     action: { default_title: "wa-scribe" },

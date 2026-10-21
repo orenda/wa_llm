@@ -1,6 +1,6 @@
 # Install wa-scribe
 
-This is the installable **0.1.5 alpha**. The standard ZIP includes the app's public OAuth client ID. To connect, install the extension, click **Connect Google Drive**, and approve Google's consent screen. Do not create a Cloud project or edit the manifest.
+This is the installable **0.1.6 alpha**. The standard ZIP includes the app's public OAuth client ID. To connect, install the extension, click **Connect Google Drive**, and approve Google's consent screen. Do not create a Cloud project or edit the manifest.
 
 ## Install or update
 
@@ -9,6 +9,8 @@ This is the installable **0.1.5 alpha**. The standard ZIP includes the app's pub
 3. Open or reload [WhatsApp Web](https://web.whatsapp.com/) and open the wa-scribe side panel. Chrome 116 or newer is required.
 
 To update an existing installation, extract the **full ZIP into the same unpacked folder**, allow files to be replaced, click **Reload** on `chrome://extensions`, then reload WhatsApp Web. The package keeps the same public extension key and extension ID, so Chrome retains its extension storage and Google connection. Never remove/reinstall the extension or clear/reset its storage during an update or recovery. The old UI-only update ZIP is incompatible with the current media-capable source; do not use it.
+
+Confirm **0.1.6** on `chrome://extensions`. This version activates the chat label with pointer/mouse events and retains a registered native name when the cached catalogue supplies only an ID. These repairs address two paths that could leave a different chat unopened; live compatibility still needs your check.
 
 The stable extension ID is:
 
@@ -26,10 +28,12 @@ The chat list comes from this browser's local WhatsApp cache, with a limit of 5,
 
 ## Pilot and inspect an export
 
-1. Select two low-sensitivity chats, including one with a small photo and one with a PDF, and click **Sync selected**.
+1. Leave an unrelated conversation open in WhatsApp. Select two other low-sensitivity chats in the extension, including one with a small photo and one with a PDF, and click **Sync selected**. WhatsApp should switch to each checked chat automatically.
 2. Follow the panel's per-chat progress and result. If WhatsApp opens a selected conversation, let the extension finish. Interacting with WhatsApp stops the job; restart Sync explicitly after you are ready.
 3. Download the complete export folder from Drive and extract it locally. Inspect `transcript.md`, `sync.json`, and the media files. Relative attachment links work in this downloaded folder; wa-scribe does not promise that Drive's web viewer resolves them.
 4. Check that each saved photo/PDF is the exact expected original. Repeat Sync and confirm it verifies unchanged files without creating duplicates. Exercise Stop and the recovery controls before using important chats.
+
+If automatic switching still fails on 0.1.6, expand the failed chat's **More actions** and copy **Result detail**, omitting chat names/IDs. Do not use Start fresh to troubleshoot navigation.
 
 Message text comes from the rendered WhatsApp conversation. Original media is saved through WhatsApp's normal Download command. A readonly lookup of the exact selected message record projects only its identity, plaintext `filehash`, optional size, MIME type and filename. Downloaded bytes must match that hash and any supplied size, and the metadata is rechecked afterward. Missing evidence, unsupported controls, grouped media and view-once media remain unavailable. A thumbnail is never presented as an original. If the normal download arrives after capture times out, Chrome may download a local copy instead; it is not marked saved in Drive.
 

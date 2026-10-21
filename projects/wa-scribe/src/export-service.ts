@@ -147,10 +147,14 @@ function coverageCopy(coverage: Coverage, unchanged = false): string {
   const reason = coverage.stopReason ?? (coverage.gaps.length ? "unverified-between" : status === "Partial" ? "scope-boundary-unverified" : null);
   return `${unchanged ? "Unchanged; " : ""}${status}${reason ? `: ${reason}` : ""}`;
 }
+function chatName(chat: OpenChat): string {
+  return catalog.find((candidate) => candidate.accountId === chat.accountId && candidate.chatId === chat.chatId &&
+    candidate.name !== candidate.chatId)?.name ?? chat.name;
+}
 function publicState() {
   const registered = (saved?.chats ?? []).map((chat) => ({
     key: chat.key, accountId: chat.accountId, chatId: chat.chatId,
-    name: catalog.find((candidate) => candidate.accountId === chat.accountId && candidate.chatId === chat.chatId)?.name ?? chat.name,
+    name: chatName(chat),
     selected: chat.selected, result: chat.result, lastSuccess: chat.lastSuccess, registered: true,
     url: exportUrl(chat),
     archives: chat.archives.map((entry) => ({ url: folderUrl(entry.rootId), accountId: entry.accountId, generation: entry.generation, deleted: entry.deleted === true })),
@@ -582,9 +586,12 @@ async function collect(chat: Chat, limit: number, scope: "visible" | "loaded", p
         finish(new Error("WhatsApp disconnected or collection was stopped. Start again explicitly."));
       });
       const source = catalog.find((candidate) => candidate.accountId === chat.accountId && candidate.chatId === chat.chatId);
-      const hints = source ? [source.name, ...source.aliases].filter((hint) => !catalog.some((other) =>
-        other.accountId === chat.accountId && other.chatId !== chat.chatId && [other.name, ...other.aliases].includes(hint))) : [chat.name];
-      port.postMessage({ type: "collect", expected: { accountId: chat.accountId, chatId: chat.chatId, name: source?.name ?? chat.name },
+      const labels = [...new Set([chatName(chat), ...(source?.aliases ?? []), chat.name])].filter((hint) => hint !== chat.chatId);
+      if (!labels.length && /^\d+@(?:c\.us|s\.whatsapp\.net)$/.test(chat.chatId)) labels.push(chat.chatId);
+      const hints = labels.filter((hint) => !catalog.some((other) => other.accountId === chat.accountId &&
+        other.chatId !== chat.chatId && [other.name, ...other.aliases].includes(hint)) &&
+        !saved?.chats.some((other) => other.accountId === chat.accountId && other.chatId !== chat.chatId && other.name === hint));
+      port.postMessage({ type: "collect", expected: { accountId: chat.accountId, chatId: chat.chatId, name: chatName(chat) },
         navigationName: hints[0] ?? null, aliases: hints.slice(1), scope, limit, maxMs: 60_000,
         skipIds: [...buried], knownAttachments: [...known].map(([messageId, slots]) => ({ messageId,
           attachments: [...slots].map(([slot, attachment]) => ({ slot, attachment })) })), reuseMedia: mode === "download" });

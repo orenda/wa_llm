@@ -27,22 +27,41 @@ function displayHints(target: NavigationTarget): Set<string> {
   return new Set([target.name, ...(target.aliases ?? [])].filter((value) => value.trim() !== ""));
 }
 
-function matchingRows(sidebar: Element, hints: ReadonlySet<string>, target: NavigationTarget): HTMLElement[] {
-  const rows = new Set<HTMLElement>();
+function matchingTargets(sidebar: Element, hints: ReadonlySet<string>, target: NavigationTarget): HTMLElement[] {
+  const rows = new Map<HTMLElement, HTMLElement>();
   for (const label of Array.from(sidebar.querySelectorAll<HTMLElement>("[title]"))) {
     const title = label.getAttribute("title");
     const phone = /^(\d+)@(?:c\.us|s\.whatsapp\.net)$/.exec(target.chatId)?.[1];
     const phoneMatch = title !== null && phone !== undefined && /^\+?[\d ()-]{7,32}$/.test(title) && title.replace(/\D/g, "") === phone;
     if (!title || (!hints.has(title) && !phoneMatch) || !visible(label)) continue;
     const row = label.closest<HTMLElement>(SIDEBAR_ROWS);
-    if (row && sidebar.contains(row) && visible(row)) rows.add(row);
+    if (row && sidebar.contains(row) && visible(row) && !rows.has(row)) rows.set(row, label);
   }
-  return [...rows];
+  return [...rows.values()];
 }
 
 function requireUniqueRow(rows: HTMLElement[]): HTMLElement | null {
   if (rows.length > 1) throw new Error("More than one visible WhatsApp chat matches the saved display name.");
   return rows[0] ?? null;
+}
+
+function activate(target: HTMLElement, expected: NavigationTarget, signal?: AbortSignal): void {
+  guard(expected, signal);
+  if (!visible(target)) throw new Error("The requested chat's sidebar entry changed before navigation.");
+  const bounds = target.getBoundingClientRect();
+  const mouse = { bubbles: true, cancelable: true, composed: true, view: window, button: 0,
+    clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 };
+  // Activate the label's own handler and its ancestors. A click on the outer row misses child/down handlers.
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
+    guard(expected, signal);
+    if (!target.isConnected) return; // A down handler may already have rendered the requested conversation.
+    const buttons = type.endsWith("down") ? 1 : 0;
+    target.dispatchEvent(type.startsWith("pointer")
+      ? new PointerEvent(type, { ...mouse, buttons, pointerId: 1, pointerType: "mouse", isPrimary: true })
+      : new MouseEvent(type, { ...mouse, buttons }));
+  }
+  guard(expected, signal);
+  if (target.isConnected) target.click();
 }
 
 function getSearchBox(sidebar: Element): HTMLElement {
@@ -142,7 +161,7 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
 async function pollSidebar(target: NavigationTarget, sidebar: Element, deadline: number, signal?: AbortSignal): Promise<HTMLElement> {
   while (Date.now() < deadline) {
     guard(target, signal);
-    const row = requireUniqueRow(matchingRows(sidebar, displayHints(target), target));
+    const row = requireUniqueRow(matchingTargets(sidebar, displayHints(target), target));
     if (row) return row;
     await wait(Math.min(150, Math.max(1, deadline - Date.now())), signal);
   }
@@ -169,7 +188,7 @@ export async function openWhatsAppChat(expected: NavigationTarget, signal?: Abor
   guard(expected, signal);
   assertResolvedAccount(current, expected);
   if (matches(current, expected)) return;
-  if (expected.allowNameNavigation === false) throw new Error("This chat's name is ambiguous. Open it once in WhatsApp Web before syncing.");
+  if (expected.allowNameNavigation === false) throw new Error("No unambiguous sidebar label is known for this chat. Open it and use Add current chat manually once to update its label.");
 
   const sidebar = document.querySelector("#pane-side");
   if (!sidebar || document.querySelectorAll("#pane-side").length !== 1) {
@@ -183,7 +202,7 @@ export async function openWhatsAppChat(expected: NavigationTarget, signal?: Abor
   document.addEventListener("keydown", trackTrustedInput, true);
   document.addEventListener("click", trackTrustedInput, true);
   try {
-    let row = requireUniqueRow(matchingRows(sidebar, displayHints(expected), expected));
+    let row = requireUniqueRow(matchingTargets(sidebar, displayHints(expected), expected));
     if (!row) {
       const side = document.querySelector("#side");
       const searchBox = getSearchBox(side && side.contains(sidebar) && !side.querySelector("#main") ? side : sidebar);
@@ -195,7 +214,7 @@ export async function openWhatsAppChat(expected: NavigationTarget, signal?: Abor
     }
 
     guard(expected, signal);
-    row.click();
+    activate(row, expected, signal);
     await pollConversation(expected, current.ok ? current.chat.chatId : null, deadline, signal);
   } finally {
     document.removeEventListener("pointerdown", trackTrustedInput, true);

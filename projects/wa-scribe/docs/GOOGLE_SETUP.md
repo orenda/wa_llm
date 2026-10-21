@@ -1,6 +1,6 @@
 # Google Drive connection
 
-The standard 0.1.5 package already includes the app's public Google OAuth client ID. Users install the ZIP, choose **Connect Google Drive**, and approve Google's consent screen. They do not register an OAuth app, enter a client ID, copy a manifest, install Node, or rebuild the extension. See [INSTALL.md](INSTALL.md).
+The standard 0.1.6 package already includes the app's public Google OAuth client ID. Users install the ZIP, choose **Connect Google Drive**, and approve Google's consent screen. They do not register an OAuth app, enter a client ID, copy a manifest, install Node, or rebuild the extension. See [INSTALL.md](INSTALL.md).
 
 The app owner registers the Chrome-extension OAuth client once for the stable extension ID `ekheeljiijopgjfljhdaehhoomeancmj`, enables Google Drive API, and configures the consent audience. The extension requests only `https://www.googleapis.com/auth/drive.file`. Its public client ID and extension key are not secrets; a client secret, private signing key, password, access token, or refresh token must never be distributed.
 

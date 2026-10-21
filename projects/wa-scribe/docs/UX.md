@@ -1,6 +1,6 @@
 # Current chat selection and connection flow
 
-The 0.1.5 alpha flow is: install the standard ZIP, connect Google Drive, search the cached chat catalogue, check the chats to export, and click Sync. The panel supports up to 5,000 cached catalogue records and stores up to 100 selected chats.
+The 0.1.6 alpha flow is: install the standard ZIP, connect Google Drive, search the cached chat catalogue, check the chats to export, and click Sync. The panel supports up to 5,000 cached catalogue records and stores up to 100 selected chats.
 
 ## Chat selection and navigation
 

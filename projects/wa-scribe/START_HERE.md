@@ -1,8 +1,10 @@
 # Installable alpha: owner verification next
 
-The 0.1.5 alpha is packaged in [`install/wa-scribe.zip`](install/wa-scribe.zip). Install it from [INSTALL.md](docs/INSTALL.md). Standard setup is Install → Connect Google Drive → approve Google's consent screen; users do not edit `manifest.json` or register an OAuth client.
+The 0.1.6 alpha is packaged in [`install/wa-scribe.zip`](install/wa-scribe.zip). Install it from [INSTALL.md](docs/INSTALL.md). Standard setup is Install → Connect Google Drive → approve Google's consent screen; users do not edit `manifest.json` or register an OAuth client.
 
 The panel searches a cached catalogue of up to 5,000 chats. Select chats with checkboxes and Sync; wa-scribe opens selected chats through WhatsApp's normal navigation and verifies canonical account/chat IDs before collection. Ambiguity pauses the affected chat; user interaction with WhatsApp stops the job. Navigation can mark chats read.
+
+The 0.1.6 navigation repair activates the matching label's down/click handlers and preserves registered native names when catalogue labels are missing. Its regressions include a different initially open conversation and rejection of a same-title destination with a different ID. They are written for owner execution, not reported as passing.
 
 Images, PDFs and other original attachments use WhatsApp's normal Download command, with raw bytes checked against the selected message's native plaintext file hash. Inspect the downloaded export folder locally: it contains `transcript.md`, `sync.json`, and immutable media copies with relative Markdown links. Links work in a locally downloaded copy; Drive's web viewer is not promised to resolve them.
 

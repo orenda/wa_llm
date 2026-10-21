@@ -2,7 +2,7 @@
 
 wa-scribe is a Chrome extension alpha that exports selected WhatsApp Web conversations to a Markdown transcript, JSON sidecar, and verified original media in Google Drive. It connects through the user's signed-in Chrome browser and sync starts only after an explicit action.
 
-**Status: installable 0.1.5 alpha.** The packaged build includes the app's public Google OAuth client ID, so the standard flow is Install → Connect Google Drive → consent. The panel searches a cached chat catalogue and lets you select chats with checkboxes. Sync navigates between selected chats through WhatsApp's normal interface, verifies canonical account/chat IDs, and stops the whole job if the user interacts with WhatsApp during navigation or collection. Opening a chat can mark it read.
+**Status: installable 0.1.6 alpha.** The packaged build includes the app's public Google OAuth client ID, so the standard flow is Install → Connect Google Drive → consent. The panel searches a cached chat catalogue and lets you select chats with checkboxes. Sync navigates between selected chats through WhatsApp's normal interface, verifies canonical account/chat IDs, and stops the whole job if the user interacts with WhatsApp during navigation or collection. Opening a chat can mark it read.
 
 Images, PDFs and other original attachments are saved through WhatsApp's normal Download command only when their bytes match the selected message's stored plaintext file hash. Missing evidence, unsupported controls, grouped media and view-once media remain explicitly unavailable. Unknown message envelopes retain the visible body and record unknown sender/time details with partial coverage.
 
