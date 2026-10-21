@@ -245,10 +245,7 @@ async function captureOriginal(page: Page, expected: OpenChat, message: Collecte
   const initial = await page.evaluate((id) => window.waScribeLocal.row(id), message.id);
   if (!initial.ok || initial.text !== message.text) throw new Error("The attachment's keyed message changed before download.");
   const row = page.locator(`#main [data-id=${cssString(initial.rawId)}]`);
-  if (await row.count() !== 1 || !await row.isVisible() || !await row.evaluate((node) => {
-    const bounds = node.getBoundingClientRect();
-    return bounds.bottom > 0 && bounds.right > 0 && bounds.top < innerHeight && bounds.left < innerWidth;
-  })) throw new Error("The attachment is outside the current visible conversation window.");
+  if (await row.count() !== 1 || !await row.isVisible()) throw new Error("The attachment's keyed message is no longer rendered.");
   const metadata = await page.evaluate((id) => window.waScribeLocal.original(id), message.id);
   if (!metadata.ok) throw new Error(metadata.reason);
   const verify = async () => {
@@ -265,6 +262,10 @@ async function captureOriginal(page: Page, expected: OpenChat, message: Collecte
     }
     stopped(signal);
   };
+  await verify();
+  // Await the bounded scroll itself so Stop cannot leave it running into a later capture.
+  await row.scrollIntoViewIfNeeded({ timeout: Math.max(1, Math.min(2_000, deadline - Date.now())) });
+  await verify();
   let cleanupViewer = false;
   let downloadWaiting: Promise<{ ok: true; download: Download } | { ok: false }> | null = null;
   let consumedDownload: Download | null = null;

@@ -24,18 +24,23 @@ async function fixture(page: Page, options: {
   pdfPending?: boolean;
   pdfUnclosable?: boolean;
   unrelatedDialog?: boolean;
+  offscreen?: "above" | "below";
+  scrollMutation?: "recycle" | "deleted";
 } = {}): Promise<string[]> {
   const blocked: string[] = [], count = options.count ?? 1;
   const iframe = `<iframe autofocus data-testid="pdf-viewer-iframe" title="PDF viewer" src="${pdfViewerUrl}"></iframe>`;
   const viewer = (closable: boolean) => `<div data-testid="pdf-overlay" style="position:fixed;inset:0;z-index:1000;background:#fff">
     ${iframe}${closable ? '<button data-testid="close-pdf" aria-label="Close">Close</button>' : ""}
   </div>`;
-  const main = (chatId: string) => `<header><span title="Fixture chat">Fixture chat</span></header>${Array.from({ length: count }, (_, index) => `
+  const messages = (chatId: string) => Array.from({ length: count }, (_, index) => `
     <div class="message-in" data-id="false_${chatId}_fixture${index}" data-pre-plain-text="[10:30, 1/2/2026] Alice: ">
       <span class="selectable-text">Document ${index}</span>
       <div data-testid="document-thumb">fixture.pdf</div>
       ${options.pdfViewer || options.tileNativeDownload ? "" : '<button data-testid="download-button" aria-label="Download">Download</button>'}
-    </div>`).join("")}`;
+    </div>`).join("");
+  const spacer = '<div data-testid="tall-spacer" style="height: 1400px"></div>';
+  const main = (chatId: string) => `<header><span title="Fixture chat">Fixture chat</span></header>${
+    options.offscreen === "below" ? spacer + messages(chatId) : messages(chatId) + (options.offscreen === "above" ? spacer : "")}`;
   const pdfPage = `<!doctype html><html><body>${options.pdfUnavailable ? "" : '<button autofocus data-testid="download-button" aria-label="Download">Download</button>'}
     <script>document.querySelector("button")?.addEventListener("click", (event) => {
       if (!event.isTrusted) return;
@@ -86,6 +91,13 @@ async function fixture(page: Page, options: {
         anchor.href = url; anchor.download = "fixture.pdf"; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
+      window.addEventListener("scroll", () => {
+        document.body.dataset.scrolled = "yes";
+        const row = document.querySelector("#main [data-id]");
+        if (${JSON.stringify(options.scrollMutation)} === "recycle") row?.setAttribute("data-id", "false_${chat.chatId}_recycled");
+        if (${JSON.stringify(options.scrollMutation)} === "deleted") row?.insertAdjacentHTML("beforeend", '<span data-icon="recalled"></span>');
+      }, { once: true });
+      if (${JSON.stringify(options.offscreen)} === "above") window.scrollTo(0, document.body.scrollHeight);
     </script></body></html>`;
   await page.context().route("**/*", async (route) => {
     if (route.request().url() === "https://web.whatsapp.com/") await route.fulfill({ contentType: "text/html", body: html });
@@ -154,6 +166,54 @@ test("native PDF bytes match the selected original while known and tombstoned me
   expect(await page.locator("body").getAttribute("data-downloads")).toBe(`${id(0)}|`);
   expect(blocked).toEqual([]);
 });
+
+for (const position of ["above", "below"] as const) {
+  test(`a loaded PDF row ${position} the viewport is scrolled into view before capturing its original`, async ({ page }) => {
+    const blocked = await fixture(page, { offscreen: position });
+    const row = page.locator(`#main [data-id="${id(0)}"]`);
+    const beforeTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+    expect(position === "above" ? beforeTop < 0 : beforeTop > 800).toBe(true);
+    let staged = 0;
+
+    const result = await capturePass(page, chat, { limit: 50, scope: "loaded" }, async (bytes, name, mediaType) => {
+      staged += 1;
+      expect([...bytes]).toEqual([...pdf]);
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(digest);
+      expect({ name, mediaType }).toEqual({ name: "fixture.pdf", mediaType: "application/pdf" });
+      return { state: "saved", name, mediaType: "application/pdf", relativePath: "media/scrolled.pdf" };
+    });
+
+    expect(staged).toBe(1);
+    expect(result.messages[0]?.attachments[0]?.attachment.state).toBe("saved");
+    expect(await row.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    })).toBe(true);
+    expect(await page.locator("body").getAttribute("data-downloads")).toBe(`${id(0)}|`);
+    expect(blocked).toEqual([]);
+  });
+}
+
+for (const mutation of ["recycle", "deleted"] as const) {
+  test(`a ${mutation} keyed message after scrolling never stages its original`, async ({ page }) => {
+    const blocked = await fixture(page, { offscreen: "below", scrollMutation: mutation });
+    let staged = 0;
+
+    const result = await capturePass(page, chat, { limit: 50, scope: "loaded" }, async () => {
+      staged += 1;
+      return { state: "saved", name: "unexpected.pdf", mediaType: "application/pdf", relativePath: "media/unexpected.pdf" };
+    });
+
+    expect(staged).toBe(0);
+    expect(await page.locator("body").getAttribute("data-scrolled")).toBe("yes");
+    expect(result.messages[0]?.attachments[0]?.attachment.state).toBe("unavailable");
+    const attachment = result.messages[0]?.attachments[0]?.attachment;
+    expect(attachment?.state).toBe("unavailable");
+    expect(attachment?.state === "unavailable" ? attachment.limitation.length : 0).toBeGreaterThan(0);
+    expect(await page.locator("body").getAttribute("data-downloads")).toBeNull();
+    expect(blocked).toEqual([]);
+  });
+}
 
 test("a native download with the wrong original hash stays unavailable and never reaches the store", async ({ page }) => {
   const blocked = await fixture(page, { mismatch: true });

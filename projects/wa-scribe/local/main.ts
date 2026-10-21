@@ -142,7 +142,8 @@ async function start(): Promise<void> {
             const saved = await currentStore.commit(target, observed);
             if (label(opened.name)) target.name = opened.name;
             const files = observed.messages.flatMap((message) => message.attachments);
-            target.result = `${saved.status}; ${observed.messages.length} messages observed; ${files.filter((item) => item.attachment.state === "saved" || item.attachment.state === "opaque").length} files observed saved`;
+            target.result = `${saved.status}; ${observed.messages.length} loaded messages; ${files.length} attachments found; ${files.filter((item) => item.attachment.state === "saved" || item.attachment.state === "opaque").length} files saved`;
+            if (!files.length) target.result += "; No attachments in these loaded messages. Older history was not searched.";
             const unavailable = files.find(({ attachment }) => attachment.state === "unavailable" || attachment.state === "pending" || attachment.state === "unsupported")?.attachment;
             if (unavailable?.state === "unavailable" || unavailable?.state === "pending") target.result += `; Attachment: ${unavailable.limitation}`;
             else if (unavailable?.state === "unsupported") target.result += `; Attachment: ${unavailable.detail}`;
