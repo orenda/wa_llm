@@ -15,7 +15,9 @@ const execute = promisify(execFile), appDirectory = join(homedir(), "Library", "
 const profile = join(appDirectory, "chromium"), configPath = join(appDirectory, "local.json");
 const binaryDirectory = dirname(fileURLToPath(import.meta.url));
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const errorText = (error: unknown) => error instanceof Error ? error.message : "The local operation failed.";
+const errorText = (error: unknown) => error instanceof Error
+  ? error.message.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "").replace(/\r?\nCall log:[\s\S]*$/u, "").trim()
+  : "The local operation failed.";
 const label = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\x00-\x1f\x7f-\x9f]/u.test(value);
 const jid = (value: unknown): value is string => typeof value === "string" && /^\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)$/.test(value) && value.length <= 256;
 function chatKey(accountId: string, chatId: string): string { return createHash("sha256").update(JSON.stringify([accountId, chatId])).digest("hex").slice(0, 16); }
@@ -141,6 +143,9 @@ async function start(): Promise<void> {
             if (label(opened.name)) target.name = opened.name;
             const files = observed.messages.flatMap((message) => message.attachments);
             target.result = `${saved.status}; ${observed.messages.length} messages observed; ${files.filter((item) => item.attachment.state === "saved" || item.attachment.state === "opaque").length} files observed saved`;
+            const unavailable = files.find(({ attachment }) => attachment.state === "unavailable" || attachment.state === "pending" || attachment.state === "unsupported")?.attachment;
+            if (unavailable?.state === "unavailable" || unavailable?.state === "pending") target.result += `; Attachment: ${unavailable.limitation}`;
+            else if (unavailable?.state === "unsupported") target.result += `; Attachment: ${unavailable.detail}`;
           } catch (cause) { target.result = errorText(cause); }
           await remember(target);
         }

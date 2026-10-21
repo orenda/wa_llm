@@ -19,7 +19,9 @@ export type StashOriginal = (bytes: Uint8Array, name: string, mediaType: string 
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const DOWNLOAD_MARKERS = "[data-icon='download'], [data-testid='download'], [data-testid='download-button'], [aria-label='Download'], [title='Download'], a[download]";
-const VIEWERS = ":is([data-testid='media-viewer'], [role='dialog']):not(#main *):not(#pane-side *):not([data-testid='media-viewer'] *):not([role='dialog'] *)";
+const PDF_VIEWER = "iframe[data-testid='pdf-viewer-iframe']";
+const VIEWERS = `:is([data-testid='media-viewer'], [role='dialog']:has([data-icon='x-viewer'])):not(:has(${PDF_VIEWER})):not(#main *):not(#pane-side *):not([data-testid='media-viewer'] *):not([role='dialog'] *)`;
+const UNRELATED_DIALOGS = `[role='dialog']:not([data-testid='media-viewer']):not([data-testid='media-viewer'] *):not(:has([data-testid='media-viewer'], [data-icon='x-viewer'], ${PDF_VIEWER})):not(#main *):not(#pane-side *)`;
 const capturing = new WeakSet<Page>();
 
 function stopped(signal?: AbortSignal): void {
@@ -87,6 +89,10 @@ async function matchingLabel(page: Page, expected: NavigationTarget): Promise<Lo
 
 export async function openChat(page: Page, expected: NavigationTarget, signal?: AbortSignal): Promise<OpenChat> {
   await guardAccount(page, expected, signal);
+  if (await page.locator(UNRELATED_DIALOGS).filter({ visible: true }).count()) {
+    throw new Error("Close the open WhatsApp dialog before navigating to a chat.");
+  }
+  await dismissKnownViewers(page, expected, signal);
   const before = await inspectPage(page);
   if (before.ok && sameChat(before.chat, expected)) return before.chat;
   if (before.ok && before.chat.accountId !== expected.accountId) throw new Error("The WhatsApp account changed.");
@@ -132,11 +138,55 @@ export async function openChat(page: Page, expected: NavigationTarget, signal?: 
 }
 
 function visibleViewers(page: Page): Locator {
-  return page.locator(VIEWERS).filter({ visible: true });
+  return page.locator(`${VIEWERS}, ${PDF_VIEWER}`).filter({ visible: true });
 }
 
 function controls(root: Locator, markers: string): Locator {
   return root.locator(markers).locator("xpath=ancestor-or-self::*[self::button or @role='button' or (self::a and @download)][1]").filter({ visible: true });
+}
+
+async function dismissKnownViewers(page: Page, expected: OpenChat, signal?: AbortSignal): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await guardAccount(page, expected, signal);
+    const viewers = visibleViewers(page);
+    const count = await viewers.count();
+    if (!count) return;
+    if (count > 1) throw new Error("More than one WhatsApp media or PDF viewer is open. Close the viewers before continuing.");
+    const viewer = viewers.first();
+    try {
+      await page.keyboard.press("Escape");
+    } catch {
+      throw new Error("WhatsApp's media or PDF viewer is still blocking the page. Close it before continuing.");
+    }
+    await page.waitForTimeout(250);
+    await guardAccount(page, expected, signal);
+    const pdfFrame = page.locator(PDF_VIEWER).filter({ visible: true });
+    if (await pdfFrame.count()) {
+      await pdfFrame.evaluate((node) => {
+        if (node instanceof HTMLIFrameElement) node.blur();
+      });
+      try { await page.keyboard.press("Escape"); }
+      catch { throw new Error("WhatsApp's media or PDF viewer is still blocking the page. Close it before continuing."); }
+      await page.waitForTimeout(250);
+      await guardAccount(page, expected, signal);
+    }
+    if (await visibleViewers(page).count()) {
+      const pdfFrame = page.locator(PDF_VIEWER).filter({ visible: true });
+      const parent = await pdfFrame.count() ? pdfFrame.locator("xpath=..") : null;
+      const closeRoot = parent && await parent.evaluate((node) => !["BODY", "HTML", "MAIN"].includes(node.tagName) &&
+        node.id !== "main" && node.id !== "pane-side" && !node.closest("#main, #pane-side") && !node.querySelector("#main, #pane-side"))
+        ? parent : viewer;
+      const close = controls(closeRoot, "[data-icon='x-viewer'], [data-icon='x'], [aria-label='Close'], [title='Close']");
+      if (await close.count() === 1) {
+        try { await close.click({ timeout: 1_000 }); }
+        catch { throw new Error("WhatsApp's media or PDF viewer is still blocking the page. Close it before continuing."); }
+        await page.waitForTimeout(250);
+      }
+    }
+    await guardAccount(page, expected, signal);
+    if (!await visibleViewers(page).count()) return;
+  }
+  throw new Error("WhatsApp's media or PDF viewer is still blocking the page. Close it before continuing.");
 }
 
 async function within<T>(operation: Promise<T>, deadline: number, signal?: AbortSignal): Promise<T> {
@@ -215,15 +265,40 @@ async function captureOriginal(page: Page, expected: OpenChat, message: Collecte
     }
     stopped(signal);
   };
-  let opened: Locator | null = null;
+  let cleanupViewer = false;
+  let downloadWaiting: Promise<{ ok: true; download: Download } | { ok: false }> | null = null;
+  let consumedDownload: Download | null = null;
   try {
     await verify();
     if (await visibleViewers(page).count()) throw new Error("Close the existing WhatsApp media viewer before capturing attachments.");
+    const pending: { download: Download | null } = { download: null };
+    const waiting = page.waitForEvent("download", {
+      timeout: Math.max(1, Math.min(8_000, deadline - Date.now())),
+    })
+      .then((download) => { pending.download = download; return { ok: true as const, download }; }, () => ({ ok: false as const }));
+    downloadWaiting = waiting;
+    cleanupViewer = true;
     let buttons = controls(row, DOWNLOAD_MARKERS);
     if (await buttons.count() === 0) {
       const documentTile = row.locator("[data-testid='document-thumb']").filter({ visible: true });
       if (await documentTile.count() === 1) {
-        buttons = documentTile;
+        await verify();
+        try { await documentTile.click({ timeout: Math.max(1, Math.min(2_000, deadline - Date.now())) }); }
+        catch { throw new Error("WhatsApp's PDF preview could not be opened safely."); }
+        const viewerDeadline = Math.min(deadline, Date.now() + 2_000);
+        const pdfViewer = page.locator(PDF_VIEWER).filter({ visible: true });
+        while (Date.now() < viewerDeadline && !pending.download && await pdfViewer.count() === 0) await delay(100, signal);
+        if (!pending.download) {
+          if (await pdfViewer.count() !== 1) throw new Error("WhatsApp's PDF preview did not open a recognized viewer; the original is unavailable.");
+          const pdfBody = page.frameLocator(PDF_VIEWER).locator("body");
+          buttons = controls(pdfBody, DOWNLOAD_MARKERS);
+          if (await buttons.count() === 0) {
+            const parent = pdfViewer.locator("xpath=..");
+            const safeParent = await parent.evaluate((node) => !["BODY", "HTML", "MAIN"].includes(node.tagName) &&
+              node.id !== "main" && node.id !== "pane-side" && !node.closest("#main, #pane-side") && !node.querySelector("#main, #pane-side"));
+            if (safeParent) buttons = controls(parent, DOWNLOAD_MARKERS);
+          }
+        }
       } else {
         const image = row.locator("img:not(.emoji)").filter({ visible: true });
         if (await image.count() !== 1 || await row.locator("video, audio").count()) throw new Error("This attachment has no supported individual original download control.");
@@ -232,41 +307,35 @@ async function captureOriginal(page: Page, expected: OpenChat, message: Collecte
         const viewerDeadline = Math.min(deadline, Date.now() + 2_000);
         while (Date.now() < viewerDeadline) {
           const viewers = visibleViewers(page);
-          if (await viewers.count() === 1) { opened = viewers; break; }
+          if (await viewers.count() === 1) break;
           if (await viewers.count() > 1) break;
           await delay(100, signal);
         }
-        if (!opened) throw new Error("WhatsApp's original image viewer is unavailable or ambiguous.");
-        buttons = controls(opened, DOWNLOAD_MARKERS);
+        if (!pending.download) {
+          if (await visibleViewers(page).count() !== 1) throw new Error("WhatsApp's original image viewer is unavailable or ambiguous.");
+          buttons = controls(visibleViewers(page).first(), DOWNLOAD_MARKERS);
+        }
       }
     }
-    if (await buttons.count() !== 1) throw new Error("The original download control is unavailable or ambiguous.");
+    if (!pending.download && await buttons.count() !== 1) {
+      throw new Error("The original download control is unavailable or ambiguous.");
+    }
     await verify();
-    let accepting = true;
-    const pending: { download: Download | null } = { download: null };
-    const waiting = page.waitForEvent("download", {
-      timeout: Math.max(1, Math.min(8_000, deadline - Date.now())), predicate: () => accepting,
-    })
-      .then((download) => { pending.download = download; return { ok: true as const, download }; }, () => ({ ok: false as const }));
-    // Attach the rejection handler before the click; a missing/changed control never leaks a rejected wait.
     let received: Awaited<typeof waiting>;
-    try {
-      await buttons.click({ timeout: Math.max(1, Math.min(2_000, deadline - Date.now())) });
-      received = await within(waiting, deadline, signal);
-    } catch (cause) {
-      // Keep this pass serialized while draining a click already delivered to Chromium.
-      const late = pending.download ? { ok: true as const, download: pending.download } : await waiting;
-      if (late.ok) {
-        await late.download.cancel();
-        await late.download.delete();
+    if (pending.download) {
+      received = { ok: true, download: pending.download };
+    } else {
+      try {
+        await buttons.click({ timeout: Math.max(1, Math.min(2_000, deadline - Date.now())) });
+        received = await within(waiting, deadline, signal);
+      } catch (cause) {
+        // The outer cleanup drains and deletes any late native download before another pass can start.
+        throw new Error("WhatsApp's original download was stopped or its control changed.", { cause });
       }
-      throw new Error("WhatsApp's original download was stopped or its control changed.", { cause });
-    } finally {
-      // A stopped wait remains handled until its short timeout and cannot claim a later pass's download.
-      accepting = false;
     }
     if (!received.ok) throw new Error("WhatsApp did not deliver an original download within the time limit.");
     const name = metadata.value.name ?? received.download.suggestedFilename();
+    consumedDownload = received.download;
     const bytes = await readDownload(received.download, deadline, signal);
     await verify();
     if (createHash("sha256").update(bytes).digest("hex") !== metadata.value.digest.toLowerCase() ||
@@ -278,13 +347,17 @@ async function captureOriginal(page: Page, expected: OpenChat, message: Collecte
     }
     return { bytes, name, mediaType: metadata.value.mediaType, verify };
   } finally {
-    if (opened && !signal?.aborted) {
-      const inspection = await inspectPage(page);
-      if (inspection.ok && sameChat(inspection.chat, expected) && await opened.count() === 1) {
-        const close = controls(opened, "[data-icon='x-viewer'], [data-icon='x'], [aria-label='Close']");
-        if (await close.count() === 1) await close.click({ timeout: 1_000 });
-        else await page.keyboard.press("Escape");
+    try {
+      // Keep the pass serialized until a triggered download arrives or its handled wait expires.
+      if (downloadWaiting && !consumedDownload) {
+        const late = await downloadWaiting;
+        if (late.ok) {
+          await late.download.cancel();
+          await late.download.delete();
+        }
       }
+    } finally {
+      if (cleanupViewer) await dismissKnownViewers(page, expected);
     }
   }
 }
