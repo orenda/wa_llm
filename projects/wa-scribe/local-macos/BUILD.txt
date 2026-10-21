@@ -1,5 +1,5 @@
 wa-scribe local macOS capability prototype 0.0.1
-Runtime source commit: f791ff18d4407749367606ad6bd2fd3fcd930fde
+Runtime source commit: 915e581cd296e03b5adbddd1876337063152e8d0
 Build host: Linux; build Node.js: 24.22.0
 Accepted runtime: macOS with stable Node.js 24.x or 26.x
 TypeScript checks (source and tests): passed
@@ -16,3 +16,5 @@ Persistent WhatsApp profile: ~/Library/Application Support/wa-scribe/chromium
 Limits: 50 rendered messages/pass, 8 MiB/file, 128 files and 32 MiB/generation, 64 MiB staging
 New local export bindings; existing extension exports/state not imported or modified
 First launcher use installs pinned npm dependencies and Playwright Chromium; QR linking is owner action
+Database compatibility: installed version with required store/key-path validation; no database upgrades
+Database regression coverage: versions 2069/2099, wrong schema, missing database; written, not run
