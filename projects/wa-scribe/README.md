@@ -2,13 +2,15 @@
 
 Current direction: a **local macOS prototype** controlling a dedicated, visible Chromium window through Playwright. All exports stay in a folder on your Mac. There is no Google Drive integration or extension setup in this workflow.
 
-[Download and launch the Mac prototype](docs/LOCAL_MAC.md). It requires Node.js 24.22.0; the launcher installs the locked dependencies and Chromium on first use. Scan WhatsApp's QR code once, refresh the local chat checklist, select chats, and Sync. Default output: `~/Documents/wa-scribe`. Use each chat's Open folder button to inspect its current export.
+[Download and launch the Mac prototype](docs/LOCAL_MAC.md). It accepts Node.js 24.x or 26.x; the launcher installs the locked dependencies and Chromium on first use. Scan WhatsApp's QR code once, refresh the local chat checklist, select chats, and Sync. Default output: `~/Documents/wa-scribe`. Use each chat's Open folder button to inspect its current export.
 
 The first capability pilot covers two conversations opened automatically, a rendered message window, original photo/PDF downloads, a repeated pass and restart. Each download must match the selected message's plaintext file hash. Missing evidence remains unavailable. This is a prototype awaiting the owner's real Mac/WhatsApp check; build success is not that evidence.
 
 The app reuses the Markdown format and reconciliation rules. New local files live under `local/`. A durable pending journal and immutable generations preserve interrupted saves; Recover is explicit. Existing extension exports and state are not imported or changed. No messages are sent.
 
 ## Development
+
+Development and CI pin Node 24.22.0 for reproducibility; the launcher also accepts other stable 24.x and 26.x releases.
 
 ```bash
 cd projects/wa-scribe

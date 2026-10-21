@@ -4,7 +4,7 @@ This is an experimental macOS prototype. It runs wa-scribe and Chromium on your 
 
 ## Start it
 
-Download and extract [wa-scribe-local-macos.zip](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/local-macos/wa-scribe-local-macos.zip?raw=true). Keep the extracted folder in a permanent location. Double-click `Start wa-scribe.command` at the folder's root. On first launch, the command installs the locked npm dependencies and Playwright's Chromium browser; both are reused on later launches. It requires Node.js 24.22.0. If that exact version is missing, the launcher prints the official Node download page and exits. Install Node yourself and relaunch; the launcher does not install Node or request administrator access.
+Download and extract [wa-scribe-local-macos.zip](https://github.com/orenda/wa_llm/blob/codex/wa-scribe-complete/projects/wa-scribe/local-macos/wa-scribe-local-macos.zip?raw=true). Keep the extracted folder in a permanent location. Double-click `Start wa-scribe.command` at the folder's root. On first launch, the command installs the locked npm dependencies and Playwright's Chromium browser; both are reused on later launches. It accepts stable Node.js 24.x or 26.x releases, including 26.11.1. If neither is installed, the launcher prints the official Node download page and exits. Install Node yourself and relaunch; the launcher does not install Node or request administrator access.
 
 The same launcher also works from a source checkout by double-clicking `scripts/Start wa-scribe.command`; it builds the local app if no bundle exists. It opens a Chromium window with the wa-scribe panel and WhatsApp Web in separate tabs. Scan the QR code in WhatsApp Web if needed. The browser profile stays at `~/Library/Application Support/wa-scribe/chromium`, so WhatsApp's local session is available next time. Keep that Mac account private and use WhatsApp's own logout controls when you want to end the session.
 
@@ -28,7 +28,7 @@ This prototype is launched by a Node command in Terminal through Finder; it is n
 
 ## Source checks for the owner
 
-From `projects/wa-scribe` on Node 24.22.0:
+From `projects/wa-scribe`, preferably on the development/CI pin Node 24.22.0 for reproducibility. Stable Node 24.x and 26.x releases pass the runtime version check; a live Mac session on Node 26 has not been verified by the agents.
 
 ```bash
 npm ci

@@ -17,20 +17,20 @@ fi
 cd "$PROJECT_DIR"
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "wa-scribe needs Node.js 24.22.0. Download that version from https://nodejs.org/en/download/ and run this launcher again."
+  echo "wa-scribe needs Node.js 24.x or 26.x. Download either from https://nodejs.org/en/download/ and run this launcher again."
   read -r -p "Press Return to close. " _ || true
   exit 1
 fi
 
 if ! node scripts/assert-node.mjs; then
-  echo "Install Node.js 24.22.0 from https://nodejs.org/en/download/ and run this launcher again."
+  echo "Install Node.js 24.x or 26.x from https://nodejs.org/en/download/ and run this launcher again."
   read -r -p "Press Return to close. " _ || true
   exit 1
 fi
 
 if [[ ! -f node_modules/@playwright/test/package.json || ! -x node_modules/.bin/playwright ]]; then
   if ! command -v npm >/dev/null 2>&1; then
-    echo "npm is missing. Install Node.js 24.22.0 from https://nodejs.org/en/download/; it includes npm."
+    echo "npm is missing. Install Node.js 24.x or 26.x from https://nodejs.org/en/download/; it includes npm."
     read -r -p "Press Return to close. " _ || true
     exit 1
   fi

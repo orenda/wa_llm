@@ -1,6 +1,4 @@
-const required = "24.22.0";
-
-if (process.versions.node !== required) {
-  console.error(`wa-scribe requires Node ${required}, got ${process.versions.node}`);
+if (!/^(24|26)\.\d+\.\d+$/.test(process.versions.node)) {
+  console.error(`wa-scribe requires Node 24.x or 26.x, got ${process.versions.node}`);
   process.exit(1);
 }
