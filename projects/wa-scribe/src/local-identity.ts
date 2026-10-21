@@ -1,7 +1,7 @@
 export type LocalMessageKey = { id: string; chatId: string; outgoing: boolean; senderId: string | null };
 export type LocalIdentityResult = { ok: true; keys: Map<string, LocalMessageKey> } | { ok: false; reason: string };
 
-const DATABASE = "model-storage", VERSION = 2070, MAX_KEYS = 100_000;
+const DATABASE = "model-storage", MAX_KEYS = 100_000;
 const MAX_KEY_LENGTH = 4_096, MAX_KEY_BYTES = 4 * 1_024 * 1_024, TIMEOUT_MS = 5_000;
 const OPAQUE_ID = /^(?:[0-9a-f]{20}|[0-9a-f]{32})$/i;
 const MESSAGE_KEY = /^(true|false)_([^_\s]+)_([^_\s]+)(?:_(\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net)))?$/;
@@ -68,11 +68,11 @@ export async function resolveLocalMessageKeys(rawIds: readonly string[], signal?
       try {
         const existing = (await indexedDB.databases()).filter((info) => info.name === DATABASE);
         if (settled) return;
-        if (existing.length !== 1 || existing[0]?.version !== VERSION) {
-          finish(failure("The local message database version is unsupported."));
+        if (existing.length !== 1) {
+          finish(failure("The local message database is not ready. Wait for WhatsApp to finish loading and retry."));
           return;
         }
-        const opening = indexedDB.open(DATABASE, VERSION);
+        const opening = indexedDB.open(DATABASE);
         opening.onupgradeneeded = () => {
           opening.transaction?.abort();
           finish(failure("The local message database changed; no upgrade was performed."));
@@ -85,7 +85,7 @@ export async function resolveLocalMessageKeys(rawIds: readonly string[], signal?
           database = opened;
           opened.onversionchange = () => finish(failure("The local message database changed during identity lookup."));
           try {
-            if (opened.version !== VERSION || !opened.objectStoreNames.contains("message")) {
+            if (!opened.objectStoreNames.contains("message")) {
               finish(failure("The local message database schema is unsupported."));
               return;
             }

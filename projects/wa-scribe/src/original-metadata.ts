@@ -1,7 +1,7 @@
 export type OriginalMetadata = { digest: string; size: number | null; mediaType: string | null; name: string | null };
 type OriginalResult = { ok: true; value: OriginalMetadata } | { ok: false; reason: string };
 
-const DATABASE = "model-storage", VERSION = 2070, TIMEOUT_MS = 3_000, MAX_FILE = 8 * 1024 * 1024;
+const DATABASE = "model-storage", TIMEOUT_MS = 3_000, MAX_FILE = 8 * 1024 * 1024;
 const MESSAGE_KEY = /^(?:true|false)_\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)_[^_\s]+(?:_\d+(?::\d+)?@(?:c\.us|lid|s\.whatsapp\.net))?$/;
 const failure = (reason: string): OriginalResult => ({ ok: false, reason });
 
@@ -66,8 +66,8 @@ export async function readMessageOriginal(messageId: string, signal?: AbortSigna
       try {
         const existing = (await indexedDB.databases()).filter((info) => info.name === DATABASE);
         if (settled) return;
-        if (existing.length !== 1 || existing[0]?.version !== VERSION) { finish(failure("The local message database version is unsupported.")); return; }
-        const opening = indexedDB.open(DATABASE, VERSION);
+        if (existing.length !== 1) { finish(failure("The local message database is not ready. Wait for WhatsApp to finish loading and retry.")); return; }
+        const opening = indexedDB.open(DATABASE);
         opening.onupgradeneeded = () => { opening.transaction?.abort(); finish(failure("The local message database changed; no upgrade was performed.")); };
         opening.onblocked = () => finish(failure("The local message database is temporarily blocked."));
         opening.onerror = () => finish(failure("The local message database could not be opened."));
@@ -77,7 +77,7 @@ export async function readMessageOriginal(messageId: string, signal?: AbortSigna
           database = opened;
           opened.onversionchange = () => finish(failure("The local message database changed during attachment lookup."));
           try {
-            if (opened.version !== VERSION || !opened.objectStoreNames.contains("message")) { finish(failure("The local message database schema is unsupported.")); return; }
+            if (!opened.objectStoreNames.contains("message")) { finish(failure("The local message database schema is unsupported.")); return; }
             const reading = opened.transaction("message", "readonly");
             transaction = reading;
             reading.onabort = () => finish(failure("Original attachment metadata lookup was interrupted."));

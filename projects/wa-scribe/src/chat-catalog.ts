@@ -3,7 +3,7 @@ export type CatalogResult =
   | { ok: true; chats: CatalogChat[]; scope: "local-cache" }
   | { ok: false; reason: string };
 
-const DATABASE = "model-storage", VERSION = 2070, CHAT_STORE = "chat", CONTACT_STORE = "contact";
+const DATABASE = "model-storage", CHAT_STORE = "chat", CONTACT_STORE = "contact";
 const MAX_CHATS = 5_000, MAX_LABEL = 256, MAX_OUTPUT_BYTES = 1_024 * 1_024, TIMEOUT_MS = 5_000;
 const CHAT_JID = /^\d+(?:-\d+)?(?::\d+)?@(?:c\.us|g\.us|lid|s\.whatsapp\.net)$/;
 const failure = (reason: string): CatalogResult => ({ ok: false, reason });
@@ -68,11 +68,11 @@ export async function readLocalChatCatalog(signal?: AbortSignal): Promise<Catalo
       try {
         const existing = (await indexedDB.databases()).filter((info) => info.name === DATABASE);
         if (settled) return;
-        if (existing.length !== 1 || existing[0]?.version !== VERSION) {
-          finish(failure("The local chat database version is unsupported."));
+        if (existing.length !== 1) {
+          finish(failure("The local chat database is not ready. Wait for WhatsApp to finish loading, then Refresh chats."));
           return;
         }
-        const opening = indexedDB.open(DATABASE, VERSION);
+        const opening = indexedDB.open(DATABASE);
         opening.onupgradeneeded = () => {
           opening.transaction?.abort();
           finish(failure("The local chat database changed; no upgrade was performed."));
@@ -85,7 +85,7 @@ export async function readLocalChatCatalog(signal?: AbortSignal): Promise<Catalo
           database = opened;
           opened.onversionchange = () => finish(failure("The local chat database changed during catalog lookup."));
           try {
-            if (opened.version !== VERSION || !opened.objectStoreNames.contains(CHAT_STORE)) {
+            if (!opened.objectStoreNames.contains(CHAT_STORE)) {
               finish(failure("The local chat database schema is unsupported."));
               return;
             }
