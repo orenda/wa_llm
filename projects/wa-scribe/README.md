@@ -1,5 +1,7 @@
 # wa-scribe
 
+Read the [investigation handoff](docs/HANDOFF-2026-10-22.md) before further capture work. The owner still prefers Chromium; attachment capture and history remain unproven. The [research prompt](docs/RESEARCH_PROMPT.md) is the next investigation, not an approved switch to Baileys.
+
 Current direction: a **local macOS prototype** controlling a dedicated, visible Chromium window through Playwright. All exports stay in a folder on your Mac. There is no Google Drive integration or extension setup in this workflow.
 
 [Download and launch the Mac prototype](docs/LOCAL_MAC.md). It accepts Node.js 24.x or 26.x; the launcher installs the locked dependencies and Chromium on first use. Scan WhatsApp's QR code once, refresh the local chat checklist, select chats, and Sync. Default output: `~/Documents/wa-scribe`. Use each chat's Open folder button to inspect its current export.

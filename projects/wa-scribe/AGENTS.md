@@ -1,5 +1,7 @@
 # Instructions for coding agents
 
+Before new capture work, read the [2026-10-22 handoff](docs/HANDOFF-2026-10-22.md) and [research prompt](docs/RESEARCH_PROMPT.md). Chromium remains the owner's preferred path; Baileys is an option to evaluate, not an accepted migration. The immediate next assignment is research and a bounded capture proposal. Respect the owner's standing instruction to leave tests unrun; no live account operations are authorized by these documents.
+
 Current direction: the local macOS Chromium capability prototype in `local/`, with local files only. Follow [LOCAL_MAC.md](docs/LOCAL_MAC.md) for its active scope. The extension backlog below records the earlier architecture; its identity, preservation and recovery rules still apply, but it does not require adding Drive or extension UI to the local runner.
 
 ## Assignment and ownership
