@@ -1,16 +1,18 @@
 wa-scribe local macOS capability prototype 0.0.1
-Runtime source commit: 90319aa2ca1822ebb46be8a715f7f2ee9795cd3b
-Build host: Linux; target runtime: macOS with Node.js 24.22.0
+Runtime source commit: f791ff18d4407749367606ad6bd2fd3fcd930fde
+Build host: Linux; build Node.js: 24.22.0
+Accepted runtime: macOS with stable Node.js 24.x or 26.x
 TypeScript checks (source and tests): passed
 npm run local:build: passed
+Launcher shell syntax: passed
 Unit tests: not run, owner execution requested
 Local browser tests: written, not run, owner execution requested
 Remote CI: not run (skip ci)
-Mac launcher / live WhatsApp verification: unrun
+Mac launcher / Node 26 runtime / live WhatsApp verification: unrun
 Agent live WhatsApp operations: none
 Google Drive/OAuth: absent from local app workflow
 Default output: ~/Documents/wa-scribe
 Persistent WhatsApp profile: ~/Library/Application Support/wa-scribe/chromium
-Limits: 50 rendered messages/pass, 8 MiB/file, 128 files and32MiB/generation,64MiB staging
+Limits: 50 rendered messages/pass, 8 MiB/file, 128 files and 32 MiB/generation, 64 MiB staging
 New local export bindings; existing extension exports/state not imported or modified
 First launcher use installs pinned npm dependencies and Playwright Chromium; QR linking is owner action
